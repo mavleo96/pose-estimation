@@ -4,9 +4,8 @@ from tqdm import tqdm
 import time
 from functools import partial
 import multiprocessing
-import argparse
-# import hydra
-# from omegaconf import OmegaConf
+import hydra
+from omegaconf import OmegaConf
 import glob
 from pathlib import Path
 
@@ -14,7 +13,7 @@ from src.lib3d.template_transform import get_obj_poses_from_template_level
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
-NUM_WORKERS = 10
+
 
 def call_render(
     idx_obj,
@@ -34,7 +33,7 @@ def call_render(
 
     gpus_device = idx_obj % num_gpus
     os.makedirs(output_dir, exist_ok=True)
-    if True: # use_blenderProc:  # TODO: remove blenderProc
+    if use_blenderProc:  # TODO: remove blenderProc
         command = f"blenderproc run ./src/lib3d/blenderproc.py {cad_path} {obj_pose_path} {output_dir} {gpus_device}"
     else:  # TODO: understand why this is not working for tless and itodd
         command = f"python -m src.custom_megapose.call_panda3d {cad_path} {obj_pose_path} {output_dir} {gpus_device}"
@@ -55,18 +54,17 @@ def call_render(
         return False
 
 
-def render() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("dataset_name", type=str)
-    args = parser.parse_args()
-    test_dataset_name = args.dataset_name
-
+@hydra.main(
+    version_base=None,
+    config_path="../../configs",
+    config_name="train",
+)
+def render(cfg) -> None:
     num_gpus = 4
     disable_output = True
 
-    # OmegaConf.set_struct(cfg, False)
-    # root_dir = Path(cfg.data.test.root_dir)
-    root_dir = Path(os.getcwd()) / "data" / "datasets"
+    OmegaConf.set_struct(cfg, False)
+    root_dir = Path(cfg.data.test.root_dir)
     root_save_dir = root_dir / "templates"
     template_poses = get_obj_poses_from_template_level(level=1, pose_distribution="all")
     template_poses[:, :3, 3] *= 0.4  # zoom to object
@@ -79,10 +77,10 @@ def render() -> None:
         "hb",
         "ycbv",
     ]
-    if test_dataset_name is None:
+    if cfg.test_dataset_name is None:
         datasets = bop23_datasets
     else:
-        datasets = [test_dataset_name]
+        datasets = [cfg.test_dataset_name]
     for dataset_name in datasets:
         dataset_save_dir = root_save_dir / f"{dataset_name}"
         logger.info(f"Rendering templates for {dataset_name}")
@@ -111,11 +109,11 @@ def render() -> None:
 
         os.makedirs(dataset_save_dir, exist_ok=True)
 
-        pool = multiprocessing.Pool(processes=int(NUM_WORKERS))
+        pool = multiprocessing.Pool(processes=int(cfg.machine.num_workers))
 
         logger.info("Start rendering for {} objects".format(len(cad_paths)))
         start_time = time.time()
-        pool = multiprocessing.Pool(processes=NUM_WORKERS)
+        pool = multiprocessing.Pool(processes=cfg.machine.num_workers)
         call_render_ = partial(
             call_render,
             list_cad_path=cad_paths,
