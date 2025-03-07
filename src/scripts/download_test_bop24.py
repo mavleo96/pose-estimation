@@ -2,6 +2,7 @@ from omegaconf import DictConfig, OmegaConf
 import logging
 import os
 import os.path as osp
+import json
 import hydra
 from pathlib import Path
 from src.utils.logging import get_logger
@@ -52,6 +53,18 @@ def run_download(config: DictConfig) -> None:
 
     logger.info(f"Running {imagewise_cmd}")
     os.system(imagewise_cmd)
+
+    bop_targets = Path(local_dir) / "test_targets_bop19.json"
+    if bop_targets.is_file():
+        logger.info(f"Removing non target images")
+        with open(Path(local_dir) / "test_targets_bop19.json", "r") as f:
+            target_key = json.loads(f.read())
+            target_key = {f"{i['scene_id']:06d}_{i['im_id']:06d}" for i in target_key}
+        for  i in tmp_dir.iterdir():
+            if i.name.split(".")[0] not in target_key:
+                i.unlink(missing_ok=True)
+    else:
+        logger.info(f"Skipping non target images removal!")
 
     webdataset_cmd = webdataset_cmd.replace("INPUT", str(tmp_dir))
     webdataset_cmd = webdataset_cmd.replace("OUTPUT", str(split_dir))
