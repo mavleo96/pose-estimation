@@ -126,16 +126,16 @@ def group_by_image_level(data, image_key="im_id"):
 def save_bop_results(path, results, additional_name=None):
     # https://github.com/thodan/bop_toolkit/blob/37d79c4c5fb027da92bc40f36b82ea9b7b197f1d/bop_toolkit_lib/inout.py#L292
     if additional_name is not None:
-        lines = [f"scene_id,im_id,obj_id,score,R,t,time,{additional_name}"]
+        lines = [f"scene_id,im_id,obj_id,score,R,t,time,R_temp,R_inplane,{additional_name}"]
     else:
-        lines = ["scene_id,im_id,obj_id,score,R,t,time"]
+        lines = ["scene_id,im_id,obj_id,score,R,t,time,R_temp,R_inplane"]
     for res in results:
         if "time" in res:
             run_time = res["time"]
         else:
             run_time = -1
         lines.append(
-            "{scene_id},{im_id},{obj_id},{score},{R},{t},{time}".format(
+            "{scene_id},{im_id},{obj_id},{score},{R},{t},{time},{R_temp},{R_inplane}".format(
                 scene_id=res["scene_id"],
                 im_id=res["im_id"],
                 obj_id=res["obj_id"],
@@ -143,6 +143,8 @@ def save_bop_results(path, results, additional_name=None):
                 R=" ".join(map(str, res["R"].flatten().tolist())),
                 t=" ".join(map(str, res["t"].flatten().tolist())),
                 time=run_time,
+                R_temp=" ".join(map(str, res["R_temp"].flatten().tolist())),
+                R_inplane=" ".join(map(str, res["R_inplane"].flatten().tolist())),
             )
         )
         if additional_name is not None:
@@ -302,10 +304,14 @@ def save_predictions_from_batched_predictions(
             if is_only_top1:
                 t = data["poses"][idx_sample][:3, 3].reshape(-1)
                 R = data["poses"][idx_sample][:3, :3].reshape(-1)
+                R_temp = data["template_pose"][idx_sample][:3, :3].reshape(-1)
+                R_inplane = data["inplane_rotation"][idx_sample].reshape(-1)
                 score = data["scores"][idx_sample]
             else:
                 t = data["poses"][idx_sample][0][:3, 3].reshape(-1)
                 R = data["poses"][idx_sample][0][:3, :3].reshape(-1)
+                R_temp = data["template_pose"][idx_sample][0][:3, :3].reshape(-1)
+                R_inplane = data["inplane_rotation"][idx_sample][0].reshape(-1)
                 score = data["scores"][idx_sample][0]
 
             top1_prediction = dict(
@@ -315,6 +321,8 @@ def save_predictions_from_batched_predictions(
                 score=score,
                 t=t,
                 R=R,
+                R_temp=R_temp,
+                R_inplane=R_inplane,
                 time=data["time"][idx_sample],
                 additional_time=data[name_additional_time][idx_sample],
                 batch_id=np.copy(batch_id),
@@ -330,6 +338,8 @@ def save_predictions_from_batched_predictions(
                 for idx_k in range(1, k):
                     t = data["poses"][idx_sample][idx_k][:3, 3].reshape(-1)
                     R = data["poses"][idx_sample][idx_k][:3, :3].reshape(-1)
+                    R_temp = data["template_pose"][idx_sample][idx_k][:3, :3].reshape(-1)
+                    R_inplane = data["inplane_rotation"][idx_sample][idx_k].reshape(-1)
                     score = data["scores"][idx_sample][idx_k]
                     topk_prediction = dict(
                         scene_id=int(data["scene_id"][idx_sample]),
@@ -338,6 +348,8 @@ def save_predictions_from_batched_predictions(
                         score=score,
                         t=t,
                         R=R,
+                        R_temp=R_temp,
+                        R_inplane=R_inplane,
                         time=data["time"][idx_sample],
                         instance_id=instance_id,
                         additional_time=data[name_additional_time][idx_sample],

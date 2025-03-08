@@ -67,6 +67,8 @@ class ObjectPoseRecovery(torch.nn.Module):
             pred_view_ids_4x4,
         )
         pred_R_inplane = normalize_affine_transform(pred_Ms)
+        pred_poses_clone = pred_poses.clone()
+        pred_R_inplane_clone = pred_R_inplane.clone()
 
         pred_poses[:, :, :3, :3] = torch.matmul(
             pred_R_inplane, pred_poses[:, :, :3, :3]
@@ -98,7 +100,7 @@ class ObjectPoseRecovery(torch.nn.Module):
         query_translation /= query_translation[:, :, 2].unsqueeze(-1)
         pred_poses[:, :, :3, 3] = query_translation * query_z.unsqueeze(-1)
 
-        return pred_poses
+        return pred_poses, pred_poses_clone, pred_R_inplane_clone
 
     def forward_recovery(
         self,

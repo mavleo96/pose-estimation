@@ -445,6 +445,8 @@ class GigaPose(pl.LightningModule):
             detection_time=predictions.detection_time.cpu().numpy(),
             poses=predictions.pred_poses.cpu().numpy(),
             scores=predictions.scores.cpu().numpy(),
+            template_pose=predictions.template_poses.cpu().numpy(),
+            inplane_rotation=predictions.inplane_rotation.cpu().numpy(),
         )
         return selected_idxs, predictions
 
@@ -595,7 +597,7 @@ class GigaPose(pl.LightningModule):
                 predictions.register_tensor(k, v[idx_sample[:, None], order])
 
         # calculate prediction
-        pred_poses = self.pose_recovery[dataset_name].forward_recovery(
+        pred_poses, template_poses, inplane_rotation = self.pose_recovery[dataset_name].forward_recovery(
             tar_label=tar_label,
             tar_K=batch.tar_K,
             tar_M=batch.tar_M,
@@ -603,6 +605,8 @@ class GigaPose(pl.LightningModule):
             pred_M=predictions.M.clone(),
         )
         predictions.register_tensor("pred_poses", pred_poses)
+        predictions.register_tensor("template_poses", template_poses)
+        predictions.register_tensor("inplane_rotation", inplane_rotation)
 
         times["final_step"] = self.timer.toc()
         self.timer.reset()
