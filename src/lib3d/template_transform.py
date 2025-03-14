@@ -167,3 +167,36 @@ def farthest_sampling(openCV_poses, num_points):
     # apply farthest point sampling
     _, farthest_idx = FPS(openGL_pose_location, num_points).fit()
     return farthest_idx
+
+
+def create_spatial_edges(level, pose_distribution="all", max_rotation_distance=25):
+    """
+    Create spatial edges between icosphere pose indices based on rotation distances.
+    
+    Args:
+        level (int): Level of template detail (0, 1, or 2)
+        pose_distribution (str): "all" or "upper"
+        max_rotation_distance (float): Maximum geodesic distance between rotations to create an edge
+        
+    Returns:
+        edges (np.ndarray): Array of shape (N, N) which is 1 there is an edge between i and j
+    """
+    # Get poses and convert to OpenGL for consistent coordinate system
+    poses = get_obj_poses_from_template_level(level, pose_distribution)
+    poses_gl = opencv2opengl(poses)[:, :3, :3]
+    
+    # Compute rotation-based distances
+    geodesic_distances = np.zeros((len(poses), len(poses)))
+    for i in range(len(poses)):
+        for j in range(i, len(poses)):
+            geodesic_distances[i, j] = geodesic(poses_gl[i], poses_gl[j])
+            geodesic_distances[j, i] = geodesic_distances[i, j]
+
+    # diagonal is 1 and where geodesic_distances <= max_rotation_distance is 0.5 and 0 otherwise
+    edges = np.where(geodesic_distances <= max_rotation_distance, 0.5, 0)
+    np.fill_diagonal(edges, 1)
+
+    # normalize the edges
+    edges = edges / edges.sum(1, keepdims=True)
+
+    return edges

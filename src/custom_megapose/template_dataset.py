@@ -196,6 +196,7 @@ class TemplateDataset:
         ).reshape((3, 3))
         if len(self.list_object_templates) != len(self.label_to_objects):
             raise RuntimeError("There are objects with duplicate labels")
+        self.edges = np.load("/home/vijay/projects/pose-estimation/src/lib3d/predefined_edges/edges_all.npy")
 
     def __getitem__(self, idx: int) -> TemplateData:
         return self.list_object_templates[idx]

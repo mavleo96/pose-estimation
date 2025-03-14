@@ -383,6 +383,7 @@ class GigaPose(pl.LightningModule):
         for name in names:
             template_data[name].stack()
             template_data[name] = template_data[name].data
+        template_data["edges"] = template_dataset.edges.to(self.device)
 
         self.template_datas[dataset_name] = tc.PandasTensorCollection(
             infos=pd.DataFrame(), **template_data
@@ -527,6 +528,7 @@ class GigaPose(pl.LightningModule):
                 tar_feat=tar_ae_features,
                 src_masks=src_masks,
                 tar_mask=batch.tar_mask[idx_sample],
+                edges=template_data.edges,
                 max_batch_size=None,
             )
             predictions_.infos = batch.infos

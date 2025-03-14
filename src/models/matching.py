@@ -191,6 +191,7 @@ class LocalSimilarity(torch.nn.Module):
         tar_feat,
         src_masks,
         tar_mask,
+        edges,
         max_batch_size=None,
     ):
         """
@@ -206,6 +207,7 @@ class LocalSimilarity(torch.nn.Module):
             name: BatchedData(batch_size=max_batch_size, data=data)
             for name, data in zip(in_names, in_data)
         }
+        in_data["edges"] = edges
         out_names = ["id_src", "score_src", "score_pts", "tar_pts", "src_pts"]
         out_data = {name: BatchedData(None) for name in out_names}
 
@@ -276,6 +278,9 @@ class LocalSimilarity(torch.nn.Module):
             sim_avg[mask] = torch.sum(score_tar2src * mask_all, dim=2)[mask] / (
                 self.num_patches**2
             )
+            edges = in_data["edges"]
+            sim_avg = sim_avg @ edges
+
             pred_score_src, pred_id_src = torch.topk(sim_avg, self.k, dim=1)
 
             # Step 3: Save the results

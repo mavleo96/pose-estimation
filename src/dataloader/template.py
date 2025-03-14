@@ -41,6 +41,7 @@ class TemplateSet(Dataset):
             self.model_infos, template_config
         )
         self.template_finder = NearestTemplateFinder(template_config)
+        self.edges = torch.from_numpy(self.template_dataset.edges).float()
 
     def get_cad_name(self, dataset_name):
         if dataset_name in ["tless"]:
