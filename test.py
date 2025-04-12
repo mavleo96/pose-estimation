@@ -3,6 +3,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 from hydra.utils import instantiate
 from torch.utils.data import DataLoader
+from src.utils.weight import load_checkpoint
 from src.utils.logging import get_logger
 from src.utils.logging import start_disable_output, stop_disable_output
 import wandb
@@ -74,8 +75,14 @@ def run_test(cfg: DictConfig):
     model.log_interval = len(test_dataloader) // 30
     logger.info("Dataloaders initialized!")
 
+    load_checkpoint(
+        model,
+        cfg.model.checkpoint_path,
+        checkpoint_key=cfg.model.checkpoint_key,
+        prefix="",
+    )
     trainer.test(
-        model, dataloaders=test_dataloader, ckpt_path=cfg.model.checkpoint_path
+        model, dataloaders=test_dataloader
     )
 
     if cfg.disable_output:

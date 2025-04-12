@@ -68,6 +68,7 @@ def run_train(cfg: DictConfig):
     logger.info(f"Using {selected_train_dataset_names} datasets")
 
     cfg.data.test.dataloader.dataset_name = "ycbv"
+    cfg.data.test.dataloader.test_setting = "localization"
     val_dataset = instantiate(cfg.data.test.dataloader)
     val_dataloader = DataLoader(
         val_dataset.web_dataloader.datapipeline,
@@ -79,14 +80,28 @@ def run_train(cfg: DictConfig):
     logger.info("Initializing model")
     model = instantiate(cfg.model)
 
-    # if model is resnet, load pretrained weight
-    if cfg.model.ist_net.pretrained_weights is not None and cfg.use_pretrained:
-        load_checkpoint(
-            model.ist_net,
-            cfg.model.ist_net.pretrained_weights,
-            checkpoint_key=cfg.model.ist_net.checkpoint_key,
-            prefix="",
-        )
+    # # if model is resnet, load pretrained weight
+    # if cfg.model.ist_net.pretrained_weights is not None and cfg.use_pretrained:
+    #     load_checkpoint(
+    #         model.ist_net,
+    #         cfg.model.ist_net.pretrained_weights,
+    #         checkpoint_key=cfg.model.ist_net.checkpoint_key,
+    #         prefix="",
+    #     )
+    # if cfg.model.checkpoint_path is not None and cfg.use_pretrained:
+    #     load_checkpoint(
+    #         model,
+    #         cfg.model.checkpoint_path,
+    #         checkpoint_key=None,
+    #         prefix="",
+    #     )
+
+    load_checkpoint(
+        model,
+        cfg.model.checkpoint_path,
+        checkpoint_key=cfg.model.checkpoint_key,
+        prefix="",
+    )
 
     logger.info("Starting training")
     trainer.fit(
