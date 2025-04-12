@@ -39,3 +39,4 @@ testing_metric:
   patch_threshold: 3
 
 checkpoint_path: ${machine.root_dir}/pretrained/gigaPose_v1.ckpt
+checkpoint_key: state_dict
