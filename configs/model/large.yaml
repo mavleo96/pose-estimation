@@ -40,5 +40,5 @@ testing_metric:
   sim_threshold: 0.5
   patch_threshold: 3
 
-checkpoint_path: ${machine.root_dir}/pretrained/gigaPose_v1.ckpt
+checkpoint_path: ${machine.root_dir}/pretrained/gigaPose_vgnn.ckpt
 checkpoint_key: state_dict
