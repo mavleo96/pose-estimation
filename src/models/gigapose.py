@@ -37,6 +37,7 @@ class GigaPose(pl.LightningModule):
         model_name,
         ae_net,
         ist_net,
+        correspondence_net,
         training_loss,
         testing_metric,
         optim_config,
@@ -51,6 +52,7 @@ class GigaPose(pl.LightningModule):
         self.model_name = model_name
         self.ae_net = ae_net
         self.ist_net = ist_net
+        self.correspondence_net = correspondence_net
         self.training_loss = training_loss
         self.testing_metric = testing_metric
 
@@ -113,26 +115,47 @@ class GigaPose(pl.LightningModule):
             )
             self.lr = self.optim_config.ist_lr
 
+        if self.optim_config.nets_to_train in ["correspondence", "all"]:
+            logger.info("Optimizer for correspondence net")
+            correspondence_optimizer = torch.optim.AdamW(
+                self.correspondence_net.parameters(),
+                self.optim_config.correspondence_lr,
+                weight_decay=self.optim_config.weight_decay,
+            )
+            self.lr = self.optim_config.correspondence_lr
+
         # disable gradient for non-updatable parameters
         if self.optim_config.nets_to_train != "all":
             if self.optim_config.nets_to_train == "ae":
                 for param in self.ist_net.parameters():
                     param.requires_grad = False
+                for param in self.correspondence_net.parameters():
+                    param.requires_grad = False
             if self.optim_config.nets_to_train == "ist":
                 for param in self.ae_net.parameters():
+                    param.requires_grad = False
+                for param in self.correspondence_net.parameters():
+                    param.requires_grad = False
+            if self.optim_config.nets_to_train == "correspondence":
+                for param in self.ae_net.parameters():
+                    param.requires_grad = False
+                for param in self.ist_net.parameters():
                     param.requires_grad = False
         else:
             self.lr = {
                 "ae": self.optim_config.ae_lr,
                 "ist": self.optim_config.ist_lr,
+                "correspondence": self.optim_config.correspondence_lr,
             }
         # combine optimizers
         if self.optim_config.nets_to_train == "all":
-            optimizer = HybridOptim([ae_optimizer, ist_optimizer])
+            optimizer = HybridOptim([ae_optimizer, ist_optimizer, correspondence_optimizer])
         elif self.optim_config.nets_to_train == "ae":
             optimizer = ae_optimizer
         elif self.optim_config.nets_to_train == "ist":
             optimizer = ist_optimizer
+        elif self.optim_config.nets_to_train == "correspondence":
+            optimizer = correspondence_optimizer
         else:
             raise NotImplementedError
         assert optimizer is not None
@@ -141,7 +164,58 @@ class GigaPose(pl.LightningModule):
     def move_to_device(self):
         self.ae_net.to(self.device)
         self.ist_net.to(self.device)
+        self.correspondence_net.to(self.device)
         logger.info(f"Moving models to {self.device} done!")
+
+    def compute_correspondence_loss(self, batch, split):
+        """
+        Contrastive loss based on corresponding patches
+        - Positive are patches from the same correspondence
+        - Negative are patches from different correspondences
+        """
+        device = batch.src_img.device
+
+        src_feat = self.ae_net(batch.src_img)
+        tar_feat = self.ae_net(batch.tar_img)
+
+        src_pts = getattr(batch, "src_pts").clone().long()
+        tar_pts = getattr(batch, "tar_pts").clone().long()
+
+        src_graph_feat = self.correspondence_net(src_feat, batch.src_mask, None)
+        tar_graph_feat = self.correspondence_net(tar_feat, batch.tar_mask, None)
+
+        loss = {}
+        src_feat_ = gather(src_graph_feat, src_pts)
+        tar_feat_ = gather(tar_graph_feat, tar_pts)
+        label = torch.arange(src_feat_.shape[0], dtype=torch.long).to(device)
+        loss["infoNCEwithGraph"] = self.training_loss.contrast_loss(
+            src_feat_,
+            tar_feat_,
+            label,
+        )
+
+        with torch.no_grad():
+            pos_sim = F.cosine_similarity(src_feat_, tar_feat_, dim=1, eps=1e-8)
+            loss["pos_sim"] = pos_sim.mean()
+
+            neg_sim = cosine_similarity(src_feat_, tar_feat_, normalize=True)
+            loss["neg_sim"] = neg_sim.mean()
+        
+        for metric_name, metric_value in loss.items():
+            name = f"{split}/{metric_name}"
+            if metric_name == "infoNCEwithGraph":
+                prog_bar = True
+            else:
+                prog_bar = False
+            self.log(
+                name,
+                metric_value,
+                sync_dist=True,
+                on_step=True,
+                on_epoch=False,
+                prog_bar=prog_bar,
+            )
+        return loss
 
     def compute_contrastive_loss(self, batch, split):
         """
@@ -293,6 +367,12 @@ class GigaPose(pl.LightningModule):
                 loss += loss_["infoNCE"]
                 times[f"infoNCE_{idx_dataset}"] = self.timer.toc()
 
+            if self.optim_config.nets_to_train in ["correspondence", "all"]:
+                self.timer.tic()
+                loss_ = self.compute_correspondence_loss(batch, "train")
+                loss += loss_["infoNCEwithGraph"]
+                times[f"correspondence_{idx_dataset}"] = self.timer.toc()
+
         for time_name, time_value in times.items():
             self.log(
                 time_name,
@@ -350,28 +430,74 @@ class GigaPose(pl.LightningModule):
             path=sample_path,
         )
 
+    def validate_correspondence_loss(self, batch, idx_batch, split):
+        src_feat = self.ae_net(batch.src_img)
+        tar_feat = self.ae_net(batch.tar_img)
+
+        src_graph_feat = self.correspondence_net(src_feat, batch.src_mask, None)
+        tar_graph_feat = self.correspondence_net(tar_feat, batch.tar_mask, None)
+
+        preds = self.testing_metric.val(
+            src_feat=src_graph_feat,
+            tar_feat=tar_graph_feat,
+            src_mask=batch.src_mask,
+            tar_mask=batch.tar_mask,
+        )
+        setattr(batch, "pred_src_pts", preds.src_pts)
+        setattr(batch, "pred_tar_pts", preds.tar_pts)
+
+        mask = torch.logical_and(
+            batch.tar_pts[:, :, 1] != -1, batch.pred_tar_pts[:, :, 1] != -1
+        )
+        distance = (batch.tar_pts[mask] - batch.pred_tar_pts[mask]).norm(dim=1).mean()
+        
+        self.log(
+            f"{split}/matching",
+            distance,
+            sync_dist=True,
+            on_step=True,
+            on_epoch=False,
+            prog_bar=True,
+        )
+
+        # visualize matches
+        vis_pts = plot_keypoints_batch(batch, type_data="pred")
+        sample_path = f"{self.log_dir}/{split}_sample_rank{self.global_rank}.png"
+        save_tensor_to_image(vis_pts, sample_path)
+        log_image(
+            logger=self.logger,
+            name=f"vis/{split}_samples",
+            path=sample_path,
+        )
+
     def validation_step(self, batch, idx_batch):
         _ = self.compute_regression_loss(batch, "val")
         _ = self.validate_contrast_loss(batch, idx_batch, "val")
+        _ = self.validate_correspondence_loss(batch, idx_batch, "val")
 
     def set_template_data(self, dataset_name):
         logger.info("Initializing template data ...")
         self.timer.tic()
         template_dataset = self.template_datasets[dataset_name]
-        names = ["rgb", "mask", "K", "M", "poses", "ae_features", "ist_features"]
+        # names = ["rgb", "mask", "K", "M", "poses", "ae_features", "ist_features"]
+        names = ["rgb", "mask", "K", "M", "poses", "graph_features", "ist_features"]
         template_data = {name: BatchedData(None) for name in names}
 
         for idx in tqdm(range(len(template_dataset))):
             for name in names:
-                if name in ["ae_features", "ist_features"]:
+                # if name in ["ae_features", "ist_features"]:
+                if name in ["ae_features", "ist_features", "graph_features"]:
                     continue
                 if name == "rgb":
                     templates = template_dataset[idx].rgb.to(self.device)
+                    masks = template_dataset[idx].mask.to(self.device)
                     if self.max_num_dets_per_forward is None:
                         template_data[name].append(templates)
 
                     ae_features = self.ae_net(templates)
-                    template_data["ae_features"].append(ae_features)
+                    graph_features = self.correspondence_net(ae_features, masks, None)
+                    # template_data["ae_features"].append(ae_features)
+                    template_data["graph_features"].append(graph_features)
 
                     ist_features = self.ist_net.forward_by_chunk(templates)
                     template_data["ist_features"].append(ist_features)
@@ -511,20 +637,23 @@ class GigaPose(pl.LightningModule):
         for idx_sub_batch, idx_sample in enumerate(list_idx_sample):
             # compute target features
             tar_ae_features = self.ae_net(batch.tar_img[idx_sample])
+            tar_graph_features = self.correspondence_net(tar_ae_features, batch.tar_mask[idx_sample], None)
             tar_label_np = np.asarray(
                 batch.infos.label[idx_sample.cpu().numpy()]
             ).astype(np.int32)
             tar_label = torch.from_numpy(tar_label_np).to(device)
 
             # template data
-            src_ae_features = template_data.ae_features[tar_label - 1]
+            # src_ae_features = template_data.ae_features[tar_label - 1]
+            # src_masks = template_data.mask[tar_label - 1]
+            src_graph_features = template_data.graph_features[tar_label - 1]
             src_masks = template_data.mask[tar_label - 1]
 
             # Step 1: Nearest neighbor search
             self.timer.tic()
             predictions_ = self.testing_metric.test(
-                src_feats=src_ae_features,
-                tar_feat=tar_ae_features,
+                src_feats=src_graph_features,
+                tar_feat=tar_graph_features,
                 src_masks=src_masks,
                 tar_mask=batch.tar_mask[idx_sample],
                 max_batch_size=None,
