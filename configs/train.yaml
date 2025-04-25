@@ -7,11 +7,11 @@ defaults:
   - _self_
 
 save_dir: ${machine.root_dir}/results/${name_exp}
-name_exp: train
+name_exp: depth_ist
 use_pretrained: true 
 
 train_dataset_id: 0 # 0 for gso, 1 for shapenet, 2 for both
-nets_to_train: all
+nets_to_train: depth_ist
 
 # parameters for rendering templates for training
 start_idx:

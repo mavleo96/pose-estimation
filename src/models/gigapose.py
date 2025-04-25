@@ -115,6 +115,19 @@ class GigaPose(pl.LightningModule):
             )
             self.lr = self.optim_config.ist_lr
 
+        if self.optim_config.nets_to_train in ["depth_ist"]:
+            # train everything except the backbone
+            logger.info("Optimizer for depth ist net")
+            depth_ist_optimizer = torch.optim.AdamW(
+                list(self.ist_net.regressor.parameters()) + 
+                list(self.ist_net.depth_backbone.parameters()) + 
+                list(self.ist_net.depth_fuser.parameters()),
+                self.optim_config.ist_lr,
+                weight_decay=self.optim_config.weight_decay,
+            )
+            self.lr = self.optim_config.ist_lr
+
+
         if self.optim_config.nets_to_train in ["correspondence", "all"]:
             logger.info("Optimizer for correspondence net")
             correspondence_optimizer = torch.optim.AdamW(
@@ -141,6 +154,13 @@ class GigaPose(pl.LightningModule):
                     param.requires_grad = False
                 for param in self.ist_net.parameters():
                     param.requires_grad = False
+            if self.optim_config.nets_to_train == "depth_ist":
+                for param in self.ae_net.parameters():
+                    param.requires_grad = False
+                for param in self.correspondence_net.parameters():
+                    param.requires_grad = False
+                for param in self.ist_net.backbone.parameters():
+                    param.requires_grad = False
         else:
             self.lr = {
                 "ae": self.optim_config.ae_lr,
@@ -156,6 +176,8 @@ class GigaPose(pl.LightningModule):
             optimizer = ist_optimizer
         elif self.optim_config.nets_to_train == "correspondence":
             optimizer = correspondence_optimizer
+        elif self.optim_config.nets_to_train == "depth_ist":
+            optimizer = depth_ist_optimizer
         else:
             raise NotImplementedError
         assert optimizer is not None
@@ -285,6 +307,8 @@ class GigaPose(pl.LightningModule):
         preds = self.ist_net(
             src_img=batch.src_img,
             tar_img=batch.tar_img,
+            src_depth=batch.src_depth,
+            tar_depth=batch.tar_depth,
             src_pts=src_pts,
             tar_pts=tar_pts,
         )
@@ -355,7 +379,7 @@ class GigaPose(pl.LightningModule):
                     path=sample_path,
                 )
 
-            if self.optim_config.nets_to_train in ["ist", "all"]:
+            if self.optim_config.nets_to_train in ["depth_ist", "ist", "all"]:
                 self.timer.tic()
                 loss_ = self.compute_regression_loss(batch, "train")
                 loss += loss_["scale"] + loss_["inp"]
@@ -490,6 +514,7 @@ class GigaPose(pl.LightningModule):
                     continue
                 if name == "rgb":
                     templates = template_dataset[idx].rgb.to(self.device)
+                    depths = template_dataset[idx].depth.to(self.device)
                     masks = template_dataset[idx].mask.to(self.device)
                     if self.max_num_dets_per_forward is None:
                         template_data[name].append(templates)
@@ -499,7 +524,7 @@ class GigaPose(pl.LightningModule):
                     # template_data["ae_features"].append(ae_features)
                     template_data["graph_features"].append(graph_features)
 
-                    ist_features = self.ist_net.forward_by_chunk(templates)
+                    ist_features = self.ist_net.forward_by_chunk(templates, depths)
                     template_data["ist_features"].append(ist_features)
                 else:
                     tmp = getattr(template_dataset[idx], name)
@@ -679,7 +704,9 @@ class GigaPose(pl.LightningModule):
             tar_label = torch.from_numpy(tar_label_np).to(device)
 
             src_ist_features = template_data.ist_features[tar_label - 1]
-            tar_ist_features = self.ist_net.forward_by_chunk(batch.tar_img[idx_sample])
+            # src_ist_depth_features = template_data.ist_depth_features[tar_label - 1]
+            tar_ist_features = self.ist_net.forward_by_chunk(batch.tar_img[idx_sample], batch.tar_depth[idx_sample])
+            # tar_ist_depth_features = self.ist_net.forward_depth_by_chunk(batch.tar_depth[idx_sample])
 
             if self.max_num_dets_per_forward is not None:
                 (
@@ -688,6 +715,8 @@ class GigaPose(pl.LightningModule):
                 ) = self.ist_net.inference_by_chunk(
                     src_feat=src_ist_features[idx_views],
                     tar_feat=tar_ist_features,
+                    # src_depth_feat=src_ist_depth_features[idx_views],
+                    # tar_depth_feat=tar_ist_depth_features,
                     src_pts=predictions.src_pts[:, idx_k],
                     tar_pts=predictions.tar_pts[:, idx_k],
                     max_batch_size=self.max_num_dets_per_forward,
@@ -699,6 +728,8 @@ class GigaPose(pl.LightningModule):
                 ) = self.ist_net.inference(
                     src_feat=src_ist_features[idx_views],
                     tar_feat=tar_ist_features,
+                    # src_depth_feat=src_ist_depth_features[idx_views],
+                    # tar_depth_feat=tar_ist_depth_features,
                     src_pts=predictions.src_pts[:, idx_k],
                     tar_pts=predictions.tar_pts[:, idx_k],
                 )

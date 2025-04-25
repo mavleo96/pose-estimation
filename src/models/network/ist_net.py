@@ -14,6 +14,8 @@ class ISTNet(pl.LightningModule):
         model_name,
         backbone,
         regressor,
+        depth_backbone,
+        depth_fuser,
         max_batch_size,
         patch_size=14,
         **kwargs,
@@ -23,12 +25,14 @@ class ISTNet(pl.LightningModule):
         self.patch_size = patch_size
         self.backbone = backbone
         self.regressor = regressor
+        self.depth_backbone = depth_backbone
+        self.depth_fuser = depth_fuser
         self.max_batch_size = max_batch_size
         self._init_weights()
         logger.info("Init for ISTNet done!")
 
     def get_toUpdate_parameters(self):
-        return list(self.backbone.parameters()) + list(self.regressor.parameters())
+        return list(self.backbone.parameters()) + list(self.regressor.parameters()) + list(self.depth_backbone.parameters()) + list(self.depth_fuser.parameters())
 
     def _init_weights(self):
         """Init weights for the MLP"""
@@ -42,17 +46,20 @@ class ISTNet(pl.LightningModule):
         logger.info("Init weights for ISTNet done!")
 
     # @torch.no_grad()
-    def forward_by_chunk(self, processed_rgbs):
+    def forward_by_chunk(self, processed_rgbs, processed_depths):
         batch_rgbs = BatchedData(batch_size=self.max_batch_size, data=processed_rgbs)
+        batch_depths = BatchedData(batch_size=self.max_batch_size, data=processed_depths)
         patch_features = BatchedData(batch_size=self.max_batch_size)
         for idx_batch in range(len(batch_rgbs)):
-            feats = self.backbone(batch_rgbs[idx_batch])
-            patch_features.cat(feats)
+            rgb_feats = self.backbone(batch_rgbs[idx_batch])
+            depth_feats = self.depth_backbone(batch_depths[idx_batch])
+            fused_feats = self.depth_fuser(depth_feats, rgb_feats)
+            patch_features.cat(fused_feats)
         return patch_features.data
 
-    def forward(self, src_img, tar_img, src_pts, tar_pts):
-        src_feat = self.forward_by_chunk(src_img)
-        tar_feat = self.forward_by_chunk(tar_img)
+    def forward(self, src_img, tar_img, src_depth, tar_depth, src_pts, tar_pts):
+        src_feat = self.forward_by_chunk(src_img, src_depth)
+        tar_feat = self.forward_by_chunk(tar_img, tar_depth)
 
         src_feat_ = gather(src_feat, src_pts.clone())
         tar_feat_ = gather(tar_feat, tar_pts.clone())
@@ -120,6 +127,43 @@ class ISTNet(pl.LightningModule):
         return pred_scales, pred_cosSin_inplanes
 
 
+class DepthFeatureExtractor(nn.Module):
+    def __init__(self, out_channels=256):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size=3, padding=1),  # B, 32, 224, 224
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),  # B, 64, 224, 224
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),  # B, 128, 224, 224
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(128, out_channels, kernel_size=3, padding=1),  # B, 256, 224, 224
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+        )
+
+    def forward(self, x):
+        x = self.encoder(x)  # B, 256, 224, 224
+        x = F.interpolate(x, size=(16, 16), mode='bilinear', align_corners=False)  # → B, 256, 16, 16
+        return x
+
+class DepthFuser(nn.Module):
+    # concat depth and rgb features and fuse them from 512 channels to 256 channels
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(512, 256, kernel_size=3, padding=1)
+
+    def forward(self, depth_feat, rgb_feat):
+        x = torch.cat([depth_feat, rgb_feat], dim=1)
+        x = self.conv1(x)         # 16x16x512 -> 16x16x256
+        return x
+
 class Regressor(nn.Module):
     """
     A simple MLP to regress scale and rotation from DINOv2 features
@@ -177,8 +221,9 @@ if __name__ == "__main__":
     model = model.to("cuda")
 
     images = torch.rand(2, 3, 224, 224).to(device="cuda")
+    depths = torch.rand(2, 1, 224, 224).to(device="cuda")
     keypoints = torch.rand(2, 256, 2).to(device="cuda")
     keypoints[keypoints < 0.5] = -1
     keypoints = keypoints.long()
-    pred = model(images, images, keypoints, keypoints)
+    pred = model(images, images, depths, depths, keypoints, keypoints)
     print(pred)

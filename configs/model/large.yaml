@@ -27,7 +27,7 @@ training_loss:
 optim_config:
   loss_type: l1
   ae_lr: 1e-5
-  ist_lr: 1e-4
+  ist_lr: 1e-5
   correspondence_lr: 1e-4
   weight_decay: 0.0005
   warm_up_steps: 200

@@ -19,6 +19,12 @@ regressor:
   use_tanh_act: true
   normalize_output: true
 
+depth_backbone:
+  _target_: src.models.network.ist_net.DepthFeatureExtractor
+
+depth_fuser:
+  _target_: src.models.network.ist_net.DepthFuser
+
 max_batch_size: 64
 
 pretrained_weights: 
