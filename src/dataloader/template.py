@@ -68,11 +68,14 @@ class TemplateSet(Dataset):
         cropped_data["images"][:, :3] = self.transforms.normalize(
             cropped_data["images"][:, :3]
         )
+        cropped_depth = self.transforms.crop_transform(data["box"], images=data["depth"])
+        cropped_depth["images"] = self.transforms.depth_normalize(cropped_depth["images"])
         data["K"] = torch.from_numpy(self.template_dataset.K).float()
 
         out_data = tc.PandasTensorCollection(
             K=data["K"],
             rgb=cropped_data["images"][:, :3],
+            depth=cropped_depth["images"],
             mask=cropped_data["images"][:, -1],
             M=cropped_data["M"],
             poses=poses,

@@ -66,10 +66,11 @@ class GigaPoseTestSet(GigaPoseTrainSet):
             self.transforms.rgb_transform.transform = [
                 transform for transform in self.transforms.rgb_transform.transform
             ]
+        self.depth_scale = depth_scale
 
         # load the dataset
         webdataset_dir = self.root_dir / self.dataset_name
-        web_dataset = WebSceneDataset(webdataset_dir / split, depth_scale=depth_scale)
+        web_dataset = WebSceneDataset(webdataset_dir / split, depth_scale=self.depth_scale, load_depth=True)
         self.web_dataloader = IterableWebSceneDataset(web_dataset, set_length=True)
 
         # load the template dataset
@@ -284,11 +285,13 @@ class GigaPoseTestSet(GigaPoseTrainSet):
             out_data = tc.PandasTensorCollection(
                 src_img=self.transforms.normalize(template_data.rgb),
                 src_mask=template_data.mask,
+                src_depth=self.transforms.depth_normalize(template_data.depth),
                 src_K=template_data.K,
                 src_M=template_data.M,
                 src_pts=keypoints["src_pts"],
                 tar_img=self.transforms.normalize(real_data.rgb),
                 tar_mask=real_data.mask,
+                tar_depth=self.transforms.depth_normalize(real_data.depth),
                 tar_K=real_data.K,
                 tar_M=real_data.M,
                 tar_pose=real_data.pose,
@@ -308,6 +311,7 @@ class GigaPoseTestSet(GigaPoseTrainSet):
             out_data = tc.PandasTensorCollection(
                 tar_img=self.transforms.normalize(real_data.rgb),
                 tar_mask=real_data.mask,
+                tar_depth=self.transforms.depth_normalize(real_data.depth),
                 tar_K=real_data.K,
                 tar_M=real_data.M,
                 infos=real_data.infos,

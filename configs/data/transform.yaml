@@ -47,6 +47,14 @@ rgb_transform:
       p: 0.3
   p: 0.8
 
+# depth normalization
+depth_normalize:
+  _target_: torchvision.transforms.Compose
+  transforms:
+    - _target_: torchvision.transforms.Normalize
+      mean: 0.5
+      std: 0.3
+
 # augmentation
 crop_augmentation: False
 inplane_augmentation: False
