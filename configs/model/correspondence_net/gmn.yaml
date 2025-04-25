@@ -2,7 +2,7 @@ _target_: src.models.network.correspondence_net.CorrespondenceNet
 model_name: gmn
 graph_encoder:
   _target_: src.models.network.correspondence_net.GraphEncoder
-  in_channels: ${model.ae_net.descriptor_size}
+  in_channels: 1030
   hidden_channels: ${model.ae_net.descriptor_size}
   out_channels: ${model.ae_net.descriptor_size}
 descriptor_size: ${model.ae_net.descriptor_size}

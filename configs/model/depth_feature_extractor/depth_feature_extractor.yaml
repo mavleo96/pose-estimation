@@ -1,0 +1,3 @@
+_target_: src.models.network.correspondence_net.DepthFeatureExtractor
+model_name: depth_feature_extractor
+out_channels: 6

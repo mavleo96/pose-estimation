@@ -15,7 +15,7 @@ class CorrespondenceNet(pl.LightningModule):
             self, 
             model_name, 
             graph_encoder,
-            descriptor_size=1024,
+            descriptor_size=1024 + 6,
             **kwargs):
         super().__init__()
         self.model_name = model_name
@@ -85,11 +85,25 @@ class CorrespondenceNet(pl.LightningModule):
             tar_feat = tar_feat.squeeze(1)
         return tar_feat
 
+class DepthFeatureExtractor(nn.Module):
+    def __init__(self, model_name, out_channels=6):
+        super().__init__()
+        self.model_name = model_name
+        self.encoder = nn.Sequential(
+            nn.Conv2d(1, out_channels, kernel_size=3, padding=1),  # B, 6, 224, 224
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+        )
+
+    def forward(self, x):
+        x = self.encoder(x)  # B, 6, 224, 224
+        x = F.interpolate(x, size=(16, 16), mode='bilinear', align_corners=False)  # → B, 6, 16, 16
+        return x
 
 
 class GraphEncoder(nn.Module):
     # TODO: graph encoder is currently only accepting 4D inputs (B, G, C, N)
-    def __init__(self, in_channels, hidden_channels, out_channels):
+    def __init__(self, in_channels=1030, hidden_channels=1024, out_channels=1024):
         super().__init__()
         self.conv1 = GCNConv(in_channels, hidden_channels)
         self.conv2 = GCNConv(hidden_channels, out_channels)
@@ -137,28 +151,23 @@ if __name__ == "__main__":
     with initialize(config_path="../../../configs/"):
         cfg = compose(config_name="train.yaml")
 
-    model = instantiate(cfg.model.correspondence_net)
-    model = model.to('cuda')
 
-    src_feats = torch.randn(162, 1024, 16, 16).to('cuda')
-    src_masks = torch.tensor(np.random.randint(0, 2, (162, 224, 224)), dtype=torch.float).to('cuda')
+    dff = instantiate(cfg.model.depth_feature_extractor).to('cuda')
+    # dff = DepthFeatureExtractor().to('cuda')
+    dff_input = torch.randn(4, 1, 224, 224).to('cuda')
+    dff_output = dff(dff_input)
+    print(f"input shapes: {dff_input.shape}")
+    print(f"output shapes: {dff_output.shape}")
 
-    print("emulating template onboarding...")
-    src_encodings = model(src_feats, src_masks, None)
-    print(f"input shapes: {src_feats.shape}, {src_masks.shape}")
-    print(f"output shapes: {src_encodings.shape}")
+    # fuse with DINOv2 features
+    dino_feats = torch.randn(4, 1024, 16, 16).to('cuda')
+    fused_feats = torch.cat([dff_output, dino_feats], dim=1)
+    print(f"input shapes: {fused_feats.shape}")
+    print(f"output shapes: {fused_feats.shape}")
 
-    print("\nemulating target feature extraction...")
-    tar_feat = torch.randn(4, 1024, 16, 16).to('cuda')
-    tar_mask = torch.tensor(np.random.randint(0, 2, (4, 224, 224)), dtype=torch.float).to('cuda')
-    src_encodings = src_encodings.repeat(4, 1, 1, 1, 1)
-    tar_encodings = model(tar_feat, tar_mask, src_encodings)
-    print(f"input shapes: {tar_feat.shape}, {tar_mask.shape}, {src_encodings.shape}")
-    print(f"output shapes: {tar_encodings.shape}")
-
-    print("\nemulating target feature extraction with 4D input...")
-    tar_feat = torch.randn(4, 162, 1024, 16, 16).to('cuda')
-    tar_mask = torch.tensor(np.random.randint(0, 2, (4, 162,224, 224)), dtype=torch.float).to('cuda')
-    tar_encodings = model(tar_feat, tar_mask, src_encodings)
-    print(f"input shapes: {tar_feat.shape}, {tar_mask.shape}, {src_encodings.shape}")
-    print(f"output shapes: {tar_encodings.shape}")
+    # pass through the correspondence net
+    correspondence_net = instantiate(cfg.model.correspondence_net).to('cuda')
+    masks = torch.tensor(np.random.randint(0, 2, (4, 224, 224)), dtype=torch.float).to('cuda')
+    encodings = correspondence_net(fused_feats, masks, None)
+    print(f"input shapes: {fused_feats.shape}")
+    print(f"output shapes: {encodings.shape}")

@@ -37,6 +37,7 @@ class GigaPose(pl.LightningModule):
         model_name,
         ae_net,
         ist_net,
+        depth_feature_extractor,
         correspondence_net,
         training_loss,
         testing_metric,
@@ -53,6 +54,7 @@ class GigaPose(pl.LightningModule):
         self.ae_net = ae_net
         self.ist_net = ist_net
         self.correspondence_net = correspondence_net
+        self.depth_feature_extractor = depth_feature_extractor
         self.training_loss = training_loss
         self.testing_metric = testing_metric
 
@@ -118,7 +120,8 @@ class GigaPose(pl.LightningModule):
         if self.optim_config.nets_to_train in ["correspondence", "all"]:
             logger.info("Optimizer for correspondence net")
             correspondence_optimizer = torch.optim.AdamW(
-                self.correspondence_net.parameters(),
+                list(self.correspondence_net.parameters()) + 
+                list(self.depth_feature_extractor.parameters()),
                 self.optim_config.correspondence_lr,
                 weight_decay=self.optim_config.weight_decay,
             )
@@ -131,10 +134,14 @@ class GigaPose(pl.LightningModule):
                     param.requires_grad = False
                 for param in self.correspondence_net.parameters():
                     param.requires_grad = False
+                for param in self.depth_feature_extractor.parameters():
+                    param.requires_grad = False
             if self.optim_config.nets_to_train == "ist":
                 for param in self.ae_net.parameters():
                     param.requires_grad = False
                 for param in self.correspondence_net.parameters():
+                    param.requires_grad = False
+                for param in self.depth_feature_extractor.parameters():
                     param.requires_grad = False
             if self.optim_config.nets_to_train == "correspondence":
                 for param in self.ae_net.parameters():
@@ -177,6 +184,12 @@ class GigaPose(pl.LightningModule):
 
         src_feat = self.ae_net(batch.src_img)
         tar_feat = self.ae_net(batch.tar_img)
+
+        src_depth = self.depth_feature_extractor(batch.src_depth)
+        tar_depth = self.depth_feature_extractor(batch.tar_depth)
+
+        src_feat = torch.cat([src_feat, src_depth], dim=1)
+        tar_feat = torch.cat([tar_feat, tar_depth], dim=1)
 
         src_pts = getattr(batch, "src_pts").clone().long()
         tar_pts = getattr(batch, "tar_pts").clone().long()
@@ -434,6 +447,12 @@ class GigaPose(pl.LightningModule):
         src_feat = self.ae_net(batch.src_img)
         tar_feat = self.ae_net(batch.tar_img)
 
+        src_depth = self.depth_feature_extractor(batch.src_depth)
+        tar_depth = self.depth_feature_extractor(batch.tar_depth)
+
+        src_feat = torch.cat([src_feat, src_depth], dim=1)
+        tar_feat = torch.cat([tar_feat, tar_depth], dim=1)
+
         src_graph_feat = self.correspondence_net(src_feat, batch.src_mask, None)
         tar_graph_feat = self.correspondence_net(tar_feat, batch.tar_mask, None)
 
@@ -491,11 +510,14 @@ class GigaPose(pl.LightningModule):
                 if name == "rgb":
                     templates = template_dataset[idx].rgb.to(self.device)
                     masks = template_dataset[idx].mask.to(self.device)
+                    depths = template_dataset[idx].depth.to(self.device)
                     if self.max_num_dets_per_forward is None:
                         template_data[name].append(templates)
 
                     ae_features = self.ae_net(templates)
-                    graph_features = self.correspondence_net(ae_features, masks, None)
+                    depth_features = self.depth_feature_extractor(depths)
+                    fused_features = torch.cat([ae_features, depth_features], dim=1)
+                    graph_features = self.correspondence_net(fused_features, masks, None)
                     # template_data["ae_features"].append(ae_features)
                     template_data["graph_features"].append(graph_features)
 
@@ -637,7 +659,9 @@ class GigaPose(pl.LightningModule):
         for idx_sub_batch, idx_sample in enumerate(list_idx_sample):
             # compute target features
             tar_ae_features = self.ae_net(batch.tar_img[idx_sample])
-            tar_graph_features = self.correspondence_net(tar_ae_features, batch.tar_mask[idx_sample], None)
+            tar_depth_features = self.depth_feature_extractor(batch.tar_depth[idx_sample])
+            tar_fused_features = torch.cat([tar_ae_features, tar_depth_features], dim=1)
+            tar_graph_features = self.correspondence_net(tar_fused_features, batch.tar_mask[idx_sample], None)
             tar_label_np = np.asarray(
                 batch.infos.label[idx_sample.cpu().numpy()]
             ).astype(np.int32)
