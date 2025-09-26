@@ -176,3 +176,7 @@ _experiments/
 # data/
 outputs/
 inference_analysis/
+
+datasets/**
+pretrained/**
+results/**
