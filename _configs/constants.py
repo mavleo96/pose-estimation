@@ -7,7 +7,8 @@ RESULTS_DIR = "/data/vijay/pose-estimation/_results"
 BOP_CLASSIC = [
     "lmo",
     "tless",
-    "itodd" "hb",
+    "itodd",
+    "hb",
     "ycbv",
     "icbin",
     "tudl",
