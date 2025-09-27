@@ -1,10 +1,8 @@
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
-from transformers import Dinov2WithRegistersModel, DINOv3ViTModel
 from torch.utils.data import DataLoader, TensorDataset
-
 from tqdm import tqdm
+from transformers import Dinov2WithRegistersModel, DINOv3ViTModel
 
 
 def dino_embeddings(img, batch_size=20, device="cuda", model_name="dinov2"):
@@ -54,12 +52,8 @@ def embedding_interpolation(
         last_hidden_state[:, 5:, :].reshape(b, h_feat, w_feat, d).permute(0, 3, 1, 2)
     )
 
-    norm_coords = (
-        pixel_coords
-        / torch.tensor([[w_img - 1, h_img - 1]], dtype=torch.float32, device=device)
-        * 2
-        - 1
-    )
+    norm = torch.tensor([[w_img - 1, h_img - 1]], dtype=torch.float32, device=device)
+    norm_coords = pixel_coords / norm * 2 - 1
     grid = norm_coords.view(1, n, 1, 2)
 
     sampled = F.grid_sample(
