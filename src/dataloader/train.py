@@ -58,10 +58,11 @@ class GigaPoseTrainSet:
             self.transforms.rgb_transform.transform = [
                 transform for transform in self.transforms.rgb_transform.transform
             ]
+        self.depth_scale = depth_scale
 
         # load the dataset
         web_dataset = WebSceneDataset(
-            self.dataset_dir / "train_pbr_web", depth_scale=depth_scale
+            self.dataset_dir / "train_pbr_web", depth_scale=depth_scale, load_depth=True
         )
         self.web_dataloader = IterableWebSceneDataset(web_dataset)
 
@@ -108,6 +109,7 @@ class GigaPoseTrainSet:
 
         m_rgba = torch.cat([m_rgb, masks[:, None, :, :]], dim=1)
         cropped_data = self.transforms.crop_transform(bboxes.xyxy_box, images=m_rgba)
+        cropped_depth = self.transforms.crop_transform(bboxes.xyxy_box, images=depth[:, None, :, :])["images"][:, 0]
 
         out_data = tc.PandasTensorCollection(
             full_rgb=rgb,
@@ -115,6 +117,7 @@ class GigaPoseTrainSet:
             K=K,
             rgb=cropped_data["images"][:, :3],
             mask=cropped_data["images"][:, -1],
+            depth=cropped_depth,
             M=cropped_data["M"],
             pose=pose,
             infos=data[idx_selected].infos,
@@ -187,6 +190,9 @@ class GigaPoseTrainSet:
         cropped_data = self.transforms.crop_transform(
             template_data["bboxes"], images=template_data["full_rgba"]
         )
+        cropped_depth = self.transforms.crop_transform(
+            template_data["bboxes"], images=template_data["full_depth"]
+        )["images"][:, 0]
 
         out_data = tc.PandasTensorCollection(
             full_rgb=template_data["full_rgba"],
@@ -194,6 +200,7 @@ class GigaPoseTrainSet:
             K=template_data["K"],
             rgb=cropped_data["images"][:, :3],
             mask=cropped_data["images"][:, -1],
+            depth=cropped_depth,
             M=cropped_data["M"],
             pose=template_data["pose"],
             infos=real_data.infos,
@@ -260,11 +267,13 @@ class GigaPoseTrainSet:
             out_data = tc.PandasTensorCollection(
                 src_img=self.transforms.normalize(template_data.rgb),
                 src_mask=template_data.mask,
+                src_depth=template_data.depth,
                 src_K=template_data.K,
                 src_M=template_data.M,
                 src_pts=keypoints["src_pts"],
                 tar_img=self.transforms.normalize(real_data.rgb),
                 tar_mask=real_data.mask,
+                tar_depth=real_data.depth,
                 tar_K=real_data.K,
                 tar_M=real_data.M,
                 tar_pts=keypoints["tar_pts"],
