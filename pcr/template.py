@@ -8,13 +8,14 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 from trimesh.ray.ray_pyembree import RayMeshIntersector
 
+from pcr.pca import PCA
 from pcr.utils import dino_embeddings, embedding_interpolation
 
 
 class CustomTemplateSet(Dataset):
-    N = 7000
+    N = 1000
 
-    def __init__(self, cfg, template_dataset, **kwargs):
+    def __init__(self, cfg, template_dataset, dino_components, **kwargs):
         self.template_dataset = template_dataset
         self.dataset_name = template_dataset.dataset_name
         self.model_infos = template_dataset.model_infos
@@ -27,6 +28,9 @@ class CustomTemplateSet(Dataset):
         self.root_dir = cfg.data.test.root_dir
         self.template_dir = os.path.join(self.root_dir, "templates", self.dataset_name)
         self.cad_models_dir = os.path.join(self.root_dir, self.dataset_name, "models")
+
+        # TODO: get the dim from a map
+        self.pca = PCA(1024, dino_components)
 
         self.point_embeddings, self.points = self.preprocess_point_embeddings()
 
@@ -95,6 +99,7 @@ class CustomTemplateSet(Dataset):
             batch_size=self.dino_batch_size,
             model_name=model_name,
         )
+        assert template_embeddings.isnan().sum() == 0
 
         # initialize point embeddings and point accum count
         point_embeddings = torch.zeros((self.N, template_embeddings.shape[-1]))
@@ -115,7 +120,12 @@ class CustomTemplateSet(Dataset):
             point_accum_count[m["point_mapping"], 0] += 1
 
         # normalize point embeddings by point accum count
-        point_embeddings /= point_accum_count
+        assert point_embeddings.isnan().sum() == 0
+        point_embeddings /= torch.where(point_accum_count > 0, point_accum_count, 1)
+
+        self.pca.fit(point_embeddings)
+        point_embeddings = self.pca(point_embeddings)
+
         return point_embeddings
 
     def preprocess_point_embeddings(self) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -170,7 +180,9 @@ if __name__ == "__main__":
     cfg.data.test.dataloader.test_setting = cfg.test_setting
     cfg.data.test.dataloader._target_ = "src.dataloader.template.TemplateSet"
     template_dataset = instantiate(cfg.data.test.dataloader)
-    template_set = CustomTemplateSet(cfg, template_dataset, dino_batch_size=40)
+    template_set = CustomTemplateSet(
+        cfg, template_dataset, dino_components=64, dino_batch_size=40
+    )
 
     print(f"point_embeddings.shape: {template_set.point_embeddings.shape}")
     print(f"points.shape: {template_set.points.shape}")

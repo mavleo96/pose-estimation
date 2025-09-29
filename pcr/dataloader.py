@@ -10,7 +10,7 @@ from src.megapose.datasets.scene_dataset import SceneObservation
 class CustomTestSet:
     N = 5000
 
-    def __init__(self, cfg, dataset, **kwargs):
+    def __init__(self, cfg, dataset, pca, **kwargs):
         self.dataset = dataset
         self.dataset_name = dataset.dataset_name
 
@@ -20,6 +20,8 @@ class CustomTestSet:
             self.dino_batch_size = 20
 
         self.root_dir = cfg.data.test.root_dir
+
+        self.pca = pca
 
     def sample_pixels_from_masks(self, mask: torch.Tensor) -> torch.Tensor:
         pixels = torch.zeros((mask.shape[0], self.N, 2), dtype=torch.int32)
@@ -66,6 +68,7 @@ class CustomTestSet:
             images, batch_size=self.dino_batch_size, model_name=model_name
         )
         b, _, d = embeddings.shape
+        assert embeddings.isnan().sum() == 0
 
         # initialize point embeddings
         point_embeddings = torch.zeros((b, self.N, d))
@@ -74,6 +77,10 @@ class CustomTestSet:
             point_embeddings[i] = embedding_interpolation(
                 embeddings[[i]], pixel_coords[i], model_name=model_name
             )
+
+        assert point_embeddings.isnan().sum() == 0
+        point_embeddings = self.pca(point_embeddings)
+
         return point_embeddings
 
     def collate_fn(self, batch: List[SceneObservation]) -> SceneObservation:
@@ -111,6 +118,8 @@ if __name__ == "__main__":
     from omegaconf import OmegaConf
     from torch.utils.data import DataLoader
 
+    from pcr.pca import PCA
+
     with initialize(config_path="../configs"):
         cfg = compose(config_name="test.yaml")
     OmegaConf.set_struct(cfg, False)
@@ -121,7 +130,11 @@ if __name__ == "__main__":
     cfg.data.test.dataloader.load_gt = False
     cfg.data.test.dataloader.test_setting = cfg.test_setting
     test_dataset = instantiate(cfg.data.test.dataloader)
-    test_set = CustomTestSet(cfg, test_dataset, dino_batch_size=40)
+
+    pca = PCA(1024, 10)
+    pca.fit(torch.randn(1024, 1024))
+
+    test_set = CustomTestSet(cfg, test_dataset, pca, dino_batch_size=40)
     dataloader = DataLoader(
         test_dataset.web_dataloader.datapipeline,
         batch_size=1,
