@@ -8,8 +8,9 @@ class PCA(nn.Module):
         self.d = d
         self.n_components = n_components
 
-        self.e = torch.zeros(d)
-        self.v = torch.zeros(d, d)
+        self.register_buffer("e", torch.zeros(d))
+        self.register_buffer("v", torch.zeros(d, d))
+        self.register_buffer("mean", torch.zeros(d))
 
     def fit(self, x):
         assert x.ndim > 1
@@ -20,12 +21,13 @@ class PCA(nn.Module):
 
         self.v.data = v
         self.e.data = e
+        self.mean.data = x.reshape(-1, self.d).mean(0)
 
     def forward(self, x):
         assert x.ndim > 1
         assert x.shape[-1] == self.d
 
-        return x @ self.v[:, -self.n_components :]
+        return (x - self.mean) @ self.v[:, -self.n_components :]
 
 
 if __name__ == "__main__":
@@ -34,7 +36,8 @@ if __name__ == "__main__":
     pca = PCA(1024, 5)
     pca.fit(x)
 
-    print(pca.e.shape)
-    print(pca.v.shape)
-    print(pca(x).shape)
-    print(pca(q).shape)
+    print(f"pca.mean.shape {pca.mean.shape}")
+    print(f"pca.e.shape {pca.e.shape}")
+    print(f"pca.v.shape {pca.v.shape}")
+    print(f"pca(x).shape {pca(x).shape}")
+    print(f"pca(q).shape {pca(q).shape}")
