@@ -1,25 +1,56 @@
+import os
+
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 from transformers import Dinov2WithRegistersModel, DINOv3ViTModel
 
+# Global model cache to avoid reloading models
+_model_cache = {}
+
+
+def get_dino_model(model_name="dinov2", device="cuda"):
+    """Get DINO model with caching to avoid reloading in worker processes."""
+    cache_key = f"{model_name}_{device}"
+
+    if cache_key not in _model_cache:
+        # Check if we're in a worker process (spawn method)
+        if os.getpid() != os.getppid():
+            # In worker process, load model fresh
+            model = {
+                "dinov2": Dinov2WithRegistersModel.from_pretrained(
+                    "facebook/dinov2-with-registers-large"
+                ),
+                "dinov3": DINOv3ViTModel.from_pretrained(
+                    "facebook/dinov3-vitl16-pretrain-lvd1689m"
+                ),
+            }[model_name]
+            model.eval()
+            model.to(device)
+            _model_cache[cache_key] = model
+        else:
+            # In main process, load and cache
+            model = {
+                "dinov2": Dinov2WithRegistersModel.from_pretrained(
+                    "facebook/dinov2-with-registers-large"
+                ),
+                "dinov3": DINOv3ViTModel.from_pretrained(
+                    "facebook/dinov3-vitl16-pretrain-lvd1689m"
+                ),
+            }[model_name]
+            model.eval()
+            model.to(device)
+            _model_cache[cache_key] = model
+
+    return _model_cache[cache_key]
+
 
 def dino_embeddings(img, batch_size=20, device="cuda", model_name="dinov2"):
     assert img.ndim == 4
     assert img.shape[1:] == (3, 224, 224)
 
-    model = {
-        "dinov2": Dinov2WithRegistersModel.from_pretrained(
-            "facebook/dinov2-with-registers-large"
-        ),
-        "dinov3": DINOv3ViTModel.from_pretrained(
-            "facebook/dinov3-vitl16-pretrain-lvd1689m"
-        ),
-    }[model_name]
-
-    model.eval()
-    model.to(device)
+    model = get_dino_model(model_name, device)
 
     loader = DataLoader(TensorDataset(img), batch_size=batch_size, shuffle=False)
 
