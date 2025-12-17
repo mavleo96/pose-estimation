@@ -91,3 +91,27 @@ def embedding_interpolation(
         embeddings, grid, mode="bilinear", align_corners=True, padding_mode="border"
     )
     return sampled.squeeze(-1).permute(0, 2, 1)
+
+
+def transform_from_Rt(R: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    single = False
+    if R.ndim == 2:
+        assert R.shape == (3, 3)
+        assert t.shape == (3,)
+        R = R.unsqueeze(0)
+        t = t.unsqueeze(0)
+        single = True
+    else:
+        assert R.ndim == 3 and R.shape[-2:] == (3, 3)
+        assert t.ndim == 2 and t.shape[-1] == 3
+        assert R.shape[0] == t.shape[0]
+
+    N = R.shape[0]
+    device, dtype = R.device, R.dtype
+
+    T = torch.zeros((N, 4, 4), device=device, dtype=dtype)
+    T[:, :3, :3] = R
+    T[:, :3, 3] = t
+    T[:, 3, 3] = 1.0
+
+    return T[0] if single else T

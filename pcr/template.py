@@ -17,10 +17,11 @@ np.random.seed(0)
 class CustomTemplateSet(Dataset):
     N = 1000
 
-    def __init__(self, cfg, template_dataset, dino_components, **kwargs):
+    def __init__(self, cfg, template_dataset, embedding_model="dinov2", dino_components=64, **kwargs):
         self.template_dataset = template_dataset
         self.dataset_name = template_dataset.dataset_name
         self.model_infos = template_dataset.model_infos
+        self.embedding_model = embedding_model
 
         if "dino_batch_size" in kwargs:
             self.dino_batch_size = kwargs["dino_batch_size"]
@@ -144,7 +145,7 @@ class CustomTemplateSet(Dataset):
             mapping = self.map_points_to_templates(obj_id, points, mesh)
 
             # aggregate dino embeddings for points from each template
-            point_embeddings = self.compute_dino_embeddings(obj_id, mapping)
+            point_embeddings = self.compute_dino_embeddings(obj_id, mapping, self.embedding_model)
 
             # store point embeddings and points for the object
             point_embeddings_list.append(point_embeddings)
@@ -162,8 +163,8 @@ class CustomTemplateSet(Dataset):
         self.pca.fit(point_embeddings)
         point_embeddings = self.pca(point_embeddings)
 
-        # # normalize point embeddings
-        # point_embeddings = F.normalize(point_embeddings, dim=-1)
+        # normalize point embeddings
+        point_embeddings = F.normalize(point_embeddings, dim=-1)
 
         return point_embeddings, points
 

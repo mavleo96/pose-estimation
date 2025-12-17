@@ -11,9 +11,10 @@ from src.megapose.datasets.scene_dataset import SceneObservation
 class CustomTestSet:
     N = 5000
 
-    def __init__(self, cfg, dataset, pca, **kwargs):
+    def __init__(self, cfg, dataset, embedding_model="dinov2", pca=None, **kwargs):
         self.dataset = dataset
         self.dataset_name = dataset.dataset_name
+        self.embedding_model = embedding_model
 
         if "dino_batch_size" in kwargs:
             self.dino_batch_size = kwargs["dino_batch_size"]
@@ -27,13 +28,24 @@ class CustomTestSet:
     def sample_pixels_from_masks(self, mask: torch.Tensor) -> torch.Tensor:
         pixels = torch.zeros((mask.shape[0], self.N, 2), dtype=torch.int32)
         for i in range(mask.shape[0]):
-            # randomly sample N pixels from the mask
-            # TODO: handle the case where the mask has less than N pixels
+            # randomly sample pixels from the mask (no replacement)
             inside_mask_indices = torch.argwhere(mask[i])
-            indices = torch.randperm(inside_mask_indices.shape[0])[: self.N]
+            num_available = inside_mask_indices.shape[0]
+            
+            if num_available == 0:
+                # No pixels in mask, skip this mask (will be zeros)
+                continue
+            elif num_available <= self.N:
+                # Sample all available pixels without replacement
+                indices = torch.randperm(num_available)
+            else:
+                # Sample N pixels without replacement
+                indices = torch.randperm(num_available)[: self.N]
+                num_available = self.N
+            
             x, y = inside_mask_indices[indices, 1], inside_mask_indices[indices, 0]
-            pixels[i, :, 0] = x
-            pixels[i, :, 1] = y
+            pixels[i, :num_available, 0] = x
+            pixels[i, :num_available, 1] = y
         return pixels
 
     def generate_point_cloud(
@@ -83,8 +95,8 @@ class CustomTestSet:
         point_embeddings = self.pca(point_embeddings)
 
         # TODO: need to move this logic to parent calling function
-        # # normalize point embeddings
-        # point_embeddings = F.normalize(point_embeddings, dim=-1)
+        # normalize point embeddings
+        point_embeddings = F.normalize(point_embeddings, dim=-1)
 
         return point_embeddings
 
@@ -96,6 +108,7 @@ class CustomTestSet:
         test_ids = batch.infos.drop_duplicates(subset="label", keep="first").index
         assert len(test_ids) == batch.test_list.infos.shape[0]
 
+        batch.test_ids = test_ids
         batch.tar_img = batch.tar_img[test_ids]
         batch.tar_mask = batch.tar_mask[test_ids]
         batch.tar_depth = batch.tar_depth[test_ids]
@@ -111,7 +124,7 @@ class CustomTestSet:
         )
         batch.register_tensor(
             "point_embeddings",
-            self.compute_dino_embeddings(batch.tar_img, batch.pixels),
+            self.compute_dino_embeddings(batch.tar_img, batch.pixels, self.embedding_model),
         )
 
         return batch
