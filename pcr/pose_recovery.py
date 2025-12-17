@@ -75,7 +75,16 @@ class PoseEstimator:
         best_R[refit_mask] = R_refit
         best_t[refit_mask] = t_refit
 
-        return best_R, best_t
+        # Recompute inliers after refit for score calculation
+        est_pts_refit = einsum(
+            best_R, src_pts, "b d1 d2, b n d2 -> b n d1"
+        ) + best_t.unsqueeze(1)
+        errors_refit = torch.norm(est_pts_refit - corres_tar_pts, dim=2)
+        inliers_refit = errors_refit < self.inlier_thresh
+        # Calculate score as the ratio of inliers (similar to GigaPose score calculation)
+        score = inliers_refit.sum(dim=1).float() / n
+
+        return best_R, best_t, score
 
     @staticmethod
     def correspondences_3d_3d(src_feat, tar_feat):
@@ -159,9 +168,10 @@ if __name__ == "__main__":
     tar_feat = feat_generator(gt_tar_pts)
     tar_pts = einsum(R, gt_tar_pts, "b d1 d2, b n d2 -> b n d1") + t.unsqueeze(1)
 
-    R_est, t_est = pose_estimator.estimate_pose(src_pts, src_feat, tar_pts, tar_feat)
-    print(f"R_est.shape, t_est.shape: {R_est.shape, t_est.shape}")
+    R_est, t_est, score = pose_estimator.estimate_pose(src_pts, src_feat, tar_pts, tar_feat)
+    print(f"R_est.shape, t_est.shape, score.shape: {R_est.shape, t_est.shape, score.shape}")
     print(f"R_est[0]: {R_est[0]}")
     print(f"t_est[0]: {t_est[0]}")
+    print(f"score[0]: {score[0]}")
     print(f"R[0]: {R[0]}")
     print(f"t[0]: {t[0]}")
