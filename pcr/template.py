@@ -3,6 +3,7 @@ from typing import Dict, Tuple
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 import trimesh
 from torch.utils.data import Dataset
 from tqdm import tqdm
@@ -11,6 +12,7 @@ from trimesh.ray.ray_pyembree import RayMeshIntersector
 from pcr.pca import PCA
 from pcr.utils import dino_embeddings, embedding_interpolation
 
+np.random.seed(0)
 
 class CustomTemplateSet(Dataset):
     N = 1000
@@ -40,7 +42,6 @@ class CustomTemplateSet(Dataset):
         ][0]
 
     def sample_points(self, obj_id: int) -> tuple[np.ndarray, trimesh.Trimesh]:
-        np.random.seed(0)
         obj_path = os.path.join(self.cad_models_dir, f"obj_{obj_id:06d}.ply")
         mesh = trimesh.load(obj_path)
         points, _ = trimesh.sample.sample_surface(mesh, self.N)
@@ -63,17 +64,21 @@ class CustomTemplateSet(Dataset):
             # transform points to camera coordinates
             p_cam = points @ R.T + t
 
+            # direction of the points
+            dirs = p_cam / np.linalg.norm(p_cam, axis=1, keepdims=True)
+
             # get valid points for camera view by checking if intersection distance matches distance from origin
             intersector = RayMeshIntersector(mesh.copy().apply_transform(pose))
             locations, index_ray, _ = intersector.intersects_location(
-                np.zeros_like(p_cam), p_cam, multiple_hits=False
+                np.zeros_like(dirs), dirs, multiple_hits=False
             )
             visible_ray = np.full(points.shape[0], False)
-            visible_ray[index_ray] = (
-                np.linalg.norm(locations - p_cam[index_ray], axis=1) < 1e-6
-            )
+            hit_dist = np.linalg.norm(locations, axis=1)
+            point_dist = np.linalg.norm(p_cam, axis=1)
+            visible_ray[index_ray] = np.abs(hit_dist - point_dist[index_ray]) < 1e-6
 
             # get pixel coordinates for valid points
+            # point in camera coordinates @ camera matrix @ image resize matrix
             pixel_coords_homo = (p_cam[visible_ray] @ K.T) @ M.T
             pixel_coords = (
                 pixel_coords_homo[:, :2] / pixel_coords_homo[:, [2]]
@@ -123,9 +128,6 @@ class CustomTemplateSet(Dataset):
         assert point_embeddings.isnan().sum() == 0
         point_embeddings /= torch.where(point_accum_count > 0, point_accum_count, 1)
 
-        self.pca.fit(point_embeddings)
-        point_embeddings = self.pca(point_embeddings)
-
         return point_embeddings
 
     def preprocess_point_embeddings(self) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -155,6 +157,14 @@ class CustomTemplateSet(Dataset):
         # stack point embeddings and points for all objects
         point_embeddings = torch.stack(point_embeddings_list, dim=0)
         points = torch.stack(point_list, dim=0)
+
+        # PCA on point embeddings
+        self.pca.fit(point_embeddings)
+        point_embeddings = self.pca(point_embeddings)
+
+        # # normalize point embeddings
+        # point_embeddings = F.normalize(point_embeddings, dim=-1)
+
         return point_embeddings, points
 
     def __len__(self) -> int:

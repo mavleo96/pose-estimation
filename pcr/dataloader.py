@@ -1,6 +1,7 @@
 from typing import List
 
 import torch
+import torch.nn.functional as F
 from einops import einsum
 
 from pcr.utils import dino_embeddings, embedding_interpolation
@@ -80,6 +81,10 @@ class CustomTestSet:
 
         assert point_embeddings.isnan().sum() == 0
         point_embeddings = self.pca(point_embeddings)
+
+        # TODO: need to move this logic to parent calling function
+        # # normalize point embeddings
+        # point_embeddings = F.normalize(point_embeddings, dim=-1)
 
         return point_embeddings
 
