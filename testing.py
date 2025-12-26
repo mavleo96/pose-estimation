@@ -28,6 +28,9 @@ def run_pcr(cfg: DictConfig) -> None:
     """Run PCR pose estimation using Hydra config."""
     OmegaConf.set_struct(cfg, False)
 
+    embedding_save_dir = Path(cfg.save_dir).parent / "embeddings"
+    embedding_save_path = embedding_save_dir / f"{cfg.test_dataset_name}_{cfg.embedding_model}_{cfg.dino_components}_{cfg.embedding_desc}.npz"
+
     # Choose device for pose recovery (CUDA if available, otherwise CPU).
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -42,7 +45,8 @@ def run_pcr(cfg: DictConfig) -> None:
         cfg,
         template_dataset0,
         embedding_model=cfg.embedding_model,
-        dino_components=64,
+        dino_components=cfg.dino_components,
+        save_path=embedding_save_path,
     )
 
     # Move static template tensors to the chosen device once.
@@ -65,7 +69,7 @@ def run_pcr(cfg: DictConfig) -> None:
         collate_fn=test_dataset.collate_fn,
     )
 
-    pose_estimator = PoseEstimator(sample_size=3, max_iters=1000, inlier_thresh=100)
+    pose_estimator = PoseEstimator(sample_size=3, max_iters=1000, inlier_thresh=25, tau=0.1)
 
     save_dir = Path(cfg.save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
