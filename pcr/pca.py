@@ -29,6 +29,20 @@ class PCA(nn.Module):
 
         return (x - self.mean) @ self.v[:, -self.n_components :]
 
+    def dict(self):
+        return {
+            "n_components": self.n_components,
+            "mean": self.mean.data.cpu().numpy(),
+            "e": self.e.data.cpu().numpy(),
+            "v": self.v.data.cpu().numpy(),
+        }
+
+    def from_dict(self, data):
+        self.n_components = data["n_components"]
+        self.mean.data = torch.from_numpy(data["mean"]).float()
+        self.e.data = torch.from_numpy(data["e"]).float()
+        self.v.data = torch.from_numpy(data["v"]).float()
+
 
 if __name__ == "__main__":
     x = torch.randn(3, 100, 1024)

@@ -11,13 +11,22 @@ from trimesh.ray.ray_pyembree import RayMeshIntersector
 
 from pcr.pca import PCA
 from pcr.utils import dino_embeddings, embedding_interpolation
+from pathlib import Path
 
 np.random.seed(0)
 
 class CustomTemplateSet(Dataset):
     N = 1000
 
-    def __init__(self, cfg, template_dataset, embedding_model="dinov2", dino_components=64, **kwargs):
+    def __init__(
+        self,
+        cfg,
+        template_dataset,
+        embedding_model="dinov2",
+        dino_components=64,
+        save_path=None,
+        **kwargs,
+    ):
         self.template_dataset = template_dataset
         self.dataset_name = template_dataset.dataset_name
         self.model_infos = template_dataset.model_infos
@@ -35,7 +44,11 @@ class CustomTemplateSet(Dataset):
         # TODO: get the dim from a map
         self.pca = PCA(1024, dino_components)
 
-        self.point_embeddings, self.points = self.preprocess_point_embeddings()
+        if save_path and save_path.exists():
+            self.load_point_embeddings(save_path)
+        else:
+            self.point_embeddings, self.points = self.preprocess_point_embeddings()
+            self.save_point_embeddings(save_path)
 
     def obj_id_to_index(self, obj_id: int) -> int:
         return [
@@ -174,6 +187,15 @@ class CustomTemplateSet(Dataset):
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         return self.point_embeddings[idx], self.points[idx]
 
+    def save_point_embeddings(self, save_path: Path) -> None:
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(save_path, point_embeddings=self.point_embeddings.cpu().numpy(), points=self.points.cpu().numpy(), pca=self.pca.dict())
+    
+    def load_point_embeddings(self, save_path: Path) -> None:
+        data = np.load(save_path, allow_pickle=True)
+        self.point_embeddings = torch.from_numpy(data["point_embeddings"]).float()
+        self.points = torch.from_numpy(data["points"]).float()
+        self.pca.from_dict(data["pca"].item())
 
 if __name__ == "__main__":
     from hydra import compose, initialize
