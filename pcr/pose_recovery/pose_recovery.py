@@ -155,6 +155,8 @@ if __name__ == "__main__":
     import trimesh
     import numpy as np
     from .utils import rpy_to_rot
+    from pcr.utils import transform_from_Rt
+    from trimesh.ray.ray_pyembree import RayMeshIntersector
 
     torch.manual_seed(42)
     np.random.seed(42)
@@ -178,10 +180,11 @@ if __name__ == "__main__":
 
     R = rpy_to_rot(
         torch.tensor([4 * torch.pi / 5]),
-        torch.tensor([torch.pi / 2]),
-        torch.tensor([torch.pi / 2]),
+        torch.tensor([torch.pi / 5]),
+        torch.tensor([3 * torch.pi / 4]),
     )
     t = torch.tensor([120, -30, 600], dtype=torch.float32).unsqueeze(0)
+    T = transform_from_Rt(R, t)
 
     print(f"R: {R.round(decimals=2)}")
     print(f"t: {t.round(decimals=2)}")
@@ -190,25 +193,35 @@ if __name__ == "__main__":
     mesh = trimesh.load(path)
 
     src_pts = trimesh.sample.sample_surface(mesh, 500)[0]
-    gt_tgt_pts = trimesh.sample.sample_surface(mesh, 700)[0]
     src_pts = torch.tensor(src_pts, dtype=torch.float32).unsqueeze(0)
-    gt_tgt_pts = torch.tensor(gt_tgt_pts, dtype=torch.float32).unsqueeze(0)
-
-    print(f"src_pts: {src_pts.mean(dim=(0, 1))} {src_pts.std(dim=(0, 1))}")
-    print(f"gt_tgt_pts: {gt_tgt_pts.mean(dim=(0, 1))} {gt_tgt_pts.std(dim=(0, 1))}")
     src_feat = feat_generator(src_pts)
-    tgt_feat = feat_generator(gt_tgt_pts)
-    tgt_pts = einsum(R, gt_tgt_pts, "b d1 d2, b n d2 -> b n d1") + t.unsqueeze(1)
-    tgt_pts += torch.randn_like(tgt_pts) * 50.0
 
-    pose_estimator = PoseEstimator(inlier_thresh=100.0)
+    # This is a hack to emulate the real data
+    # We oversample tgt pts and filter for camera facing points
+    gt_tar_pts_all = trimesh.sample.sample_surface(mesh, 3000)[0]
+    gt_tar_pts_all = torch.tensor(gt_tar_pts_all, dtype=torch.float32).unsqueeze(0)
+    tar_feat_all = feat_generator(gt_tar_pts_all)
+    tar_pts_all = einsum(R, gt_tar_pts_all, "b d1 d2, b n d2 -> b n d1") + t.unsqueeze(1)
 
-    R_est, t_est, score = pose_estimator.estimate_pose(
-        src_pts, src_feat, tgt_pts, tgt_feat
-    )
-    print(f"R_est: {R_est.round(decimals=2)}")
-    print(f"t_est: {t_est.round(decimals=2)}")
-    print(f"score: {score.item():.3f}")
+    # Filter for camera facing points
+    def filter_camera_facing_points(mesh, T, pts):
+        intersector = RayMeshIntersector(mesh.copy().apply_transform(T))
+        locations, index_ray, _ = intersector.intersects_location(
+            np.zeros_like(pts), pts, multiple_hits=False
+        )
+        visible_ray = np.full(pts.shape[0], False)
+        hit_dist = np.linalg.norm(locations, axis=1)
+        point_dist = np.linalg.norm(pts, axis=1)
+        visible_ray[index_ray] = np.abs(hit_dist - point_dist[index_ray]) < 1e-2
+        return visible_ray
+
+    mask = filter_camera_facing_points(mesh, T.numpy()[0], tar_pts_all.numpy()[0])
+    print(f"mask: {mask.sum()}")
+    tar_pts = tar_pts_all[:, mask][:1000]
+    tar_feat = tar_feat_all[:, mask][:1000]
+
+    # Add noise to tgt pts
+    tar_pts += torch.randn_like(tar_pts) * 50.0
 
     def geodesic_error(R_est, R_gt):
         R_diff = torch.matmul(R_est.T, R_gt)
@@ -216,6 +229,15 @@ if __name__ == "__main__":
         cos_theta = (trace - 1) / 2
         cos_theta = torch.clamp(cos_theta, -1, 1)
         return torch.acos(cos_theta)
+
+    pose_estimator = PoseEstimator(inlier_thresh=100.0)
+
+    R_est, t_est, score = pose_estimator.estimate_pose(
+        src_pts, src_feat, tar_pts, tar_feat
+    )
+    print(f"R_est: {R_est.round(decimals=2)}")
+    print(f"t_est: {t_est.round(decimals=2)}")
+    print(f"score: {score.item():.3f}")
 
     # Error between R_est and R
     geodesic_error_R = geodesic_error(R_est[0], R[0]) / torch.pi * 180
@@ -228,18 +250,11 @@ if __name__ == "__main__":
     pose_estimator = PoseEstimator(inlier_thresh=100.0, tau=0.1)
 
     R_est, t_est, score = pose_estimator.estimate_pose(
-        src_pts, src_feat, tgt_pts, tgt_feat
+        src_pts, src_feat, tar_pts, tar_feat
     )
     print(f"R_est: {R_est.round(decimals=2)}")
     print(f"t_est: {t_est.round(decimals=2)}")
     print(f"score: {score.item():.3f}")
-
-    def geodesic_error(R_est, R_gt):
-        R_diff = torch.matmul(R_est.T, R_gt)
-        trace = torch.trace(R_diff)
-        cos_theta = (trace - 1) / 2
-        cos_theta = torch.clamp(cos_theta, -1, 1)
-        return torch.acos(cos_theta)
 
     # Error between R_est and R
     geodesic_error_R = geodesic_error(R_est[0], R[0]) / torch.pi * 180

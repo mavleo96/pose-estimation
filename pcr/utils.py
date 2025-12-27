@@ -94,6 +94,7 @@ def embedding_interpolation(
 
 
 def transform_from_Rt(R: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    """Create 4x4 homogeneous transformation matrix from rotation matrix and translation vector."""
     single = False
     if R.ndim == 2:
         assert R.shape == (3, 3)
