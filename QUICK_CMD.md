@@ -6,9 +6,10 @@ python bop_toolkit/scripts/eval_bop19_pose.py \
     --num_workers=1
 
 
-python error_analysis.py \
-  --scene_gt=/workspace/pose-estimation/datasets/lmo/test/000002/scene_gt.json \
-  --pred_csv=/workspace/pose-estimation/results/large_lmo_pcr_dinvo2_normalized/predictions/pcr-pbrreal-rgb-mmodel_lmo-test_lmo_pcr_dinvo2_normalized.csv
+python scripts/error_analysis.py \
+  --data_root=/workspace/pose-estimation/datasets \
+  --dataset_name=lmo \
+  --pred_csv=/workspace/pose-estimation/results/large_debug4/predictions/pcr-pbrreal-rgb-mmodel_lmo-test_debug4.csv
 
 
-python testing.py test_dataset_name=lmo run_id=large_debug_lmo +embedding_model=dinvo2 +dino_components=64 +embedding_desc=avg_normalized
+  python testing.py test_dataset_name=lmo run_id=large_debug_lmo +embedding_model=dinvo2 +dino_components=64 +embedding_desc=avg_normalized
