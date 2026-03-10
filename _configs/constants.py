@@ -1,7 +1,6 @@
 # paths
-ROOT_DIR = "/data/vijay/pose-estimation"
-DATA_DIR = "/data/vijay/pose-estimation/_datasets"
-RESULTS_DIR = "/data/vijay/pose-estimation/_results"
+DATA_DIR = "/data/pose-estimation"
+RESULTS_DIR = "/workspace/pose-estimation/results"
 
 # dataset names
 BOP_CLASSIC = [
@@ -24,6 +23,5 @@ BOP_INDUSTRIAL = [
     "itoddmv",
 ]
 
-# train data base url
-TRAIN_DATA_BASE_URL = "https://www.paris.inria.fr/archive_ylabbeprojectsdata/megapose"
+# train datasets
 TRAIN_DATASETS = ["gso", "shapenet"]
