@@ -30,9 +30,7 @@ class TemplateDataset:
                 self.data_path / dataset_name / "camera_uw.json"
             )
         else:
-            self.camera = CameraIntrinsic.from_json(
-                self.data_path / dataset_name / "camera.json"
-            )
+            self.camera = CameraIntrinsic.from_json(self.data_path / dataset_name / "camera.json")
 
         self.precompute_poses_and_templates()
 
@@ -63,8 +61,6 @@ class TemplateDataset:
                 self.camera.depth_scale,
                 save_dir,
             )
-            np.save(
-                self.templates_path / "object_poses" / f"{object_id:06d}.npy", T_m2c
-            )
+            np.save(self.templates_path / "object_poses" / f"{object_id:06d}.npy", T_m2c)
 
             print(f"object {object_id:06d} done — {len(T_m2c)} templates to {save_dir}")

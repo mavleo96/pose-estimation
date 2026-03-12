@@ -73,9 +73,7 @@ def look_at_matrix(cam_pos, roll=1, target=None):
     return M
 
 
-def generate_and_save_templates(
-    trimesh_model, T_m2c, K, width, height, depth_scale, save_dir
-):
+def generate_and_save_templates(trimesh_model, T_m2c, K, width, height, depth_scale, save_dir):
     """
     Generate and save templates for a trimesh model from N poses and save RGB + depth to disk.
 
@@ -103,9 +101,7 @@ def generate_and_save_templates(
 
     # znear/zfar set to cover 10mm to 10m
     cam_node = scene.add(
-        pyrender.IntrinsicsCamera(
-            K[0, 0], K[1, 1], K[0, 2], K[1, 2], znear=10.0, zfar=10000.0
-        )
+        pyrender.IntrinsicsCamera(K[0, 0], K[1, 1], K[0, 2], K[1, 2], znear=10.0, zfar=10000.0)
     )
     # light_node = scene.add(
     #     pyrender.DirectionalLight(color=[1, 1, 1], intensity=DIRECTIONAL_LIGHT)
