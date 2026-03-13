@@ -39,6 +39,23 @@ def rotation_matrix_to_euler(R):
     return roll, pitch, yaw
 
 
+def transform_from_Rt(R, t):
+    """
+    R: (B, 3, 3) rotation matrices
+    t: (B, 3) translation vectors
+    Returns:
+        T: (B, 4, 4) transformation matrices, where T = [[R, t], [0, 0, 0, 1]]
+    """
+    assert R.ndim == 3 and R.shape[-2:] == (3, 3)
+    assert t.ndim == 2 and t.shape[-1] == 3
+    assert R.shape[0] == t.shape[0]
+
+    T = torch.eye(4, device=R.device, dtype=R.dtype).unsqueeze(0).expand(R.shape[0], -1, -1).clone()
+    T[:, :3, :3] = R
+    T[:, :3, 3] = t
+    return T
+
+
 if __name__ == "__main__":
     # euler to rotation matrix test
     print("euler_to_rotation_matrix test:")
