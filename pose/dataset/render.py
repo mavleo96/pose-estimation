@@ -109,7 +109,6 @@ def generate_and_save_templates(trimesh_model, T_m2c, K, width, height, depth_sc
 
     r = pyrender.OffscreenRenderer(width, height)
     for i, m2c in enumerate(T_m2c):
-
         # convert OpenCV m2c to OpenGL c2m
         # OpenCV: +X right, +Y down,  +Z forward
         # OpenGL: +X right, +Y up,    +Z backward
