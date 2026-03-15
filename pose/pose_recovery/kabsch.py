@@ -193,6 +193,8 @@ if __name__ == "__main__":
     import trimesh
     import numpy as np
     from ..utils import euler_to_rotation_matrix
+    from _configs.constants import DATA_DIR
+    from pathlib import Path
 
     torch.manual_seed(42)
     np.random.seed(42)
@@ -211,8 +213,8 @@ if __name__ == "__main__":
     print(f"R: {R.round(decimals=2)}")
     print(f"t: {t.round(decimals=2)}")
 
-    path = "/workspace/pose-estimation/datasets/lmo/models/obj_000008.ply"
-    mesh = trimesh.load(path)
+    model_path = Path(DATA_DIR) / "lmo" / "models" / "obj_000008.ply"
+    mesh = trimesh.load(model_path)
 
     src_pts = trimesh.sample.sample_surface(mesh, 500)[0]
     src_pts = torch.tensor(src_pts, dtype=torch.float32).unsqueeze(0)
