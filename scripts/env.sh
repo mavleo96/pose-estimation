@@ -17,6 +17,7 @@ pip install -U torch \
  accelerate \
  opencv-python \
  pyrender \
+ embreex \
  trimesh \
  ipykernel \
  wandb \
