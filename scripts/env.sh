@@ -4,7 +4,7 @@ set -euo pipefail
 ENV_NAME="pose2"
 export PYOPENGL_PLATFORM=egl
 
-conda create -n $ENV_NAME python=3.12 -y && \
+conda create -n $ENV_NAME python=3.10 -y && \
 conda init bash && \
 eval "$(conda shell.bash hook)" && \
 conda activate $ENV_NAME && \
@@ -17,6 +17,8 @@ pip install -U torch \
  accelerate \
  opencv-python \
  pyrender \
+ PyOpenGL \
+ PyOpenGL-accelerate \
  embreex \
  trimesh \
  ipykernel \

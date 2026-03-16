@@ -3,9 +3,6 @@ import pyrender
 from PIL import Image
 from pathlib import Path
 
-AMBIENT_LIGHT = 1.0
-DIRECTIONAL_LIGHT = 3.0
-
 
 def look_at_matrix(cam_pos, roll=1, target=None):
     """
@@ -73,12 +70,12 @@ def look_at_matrix(cam_pos, roll=1, target=None):
     return M
 
 
-def generate_and_save_templates(trimesh_model, T_m2c, K, width, height, depth_scale, save_dir):
+def generate_and_save_templates(mesh, T_m2c, K, width, height, depth_scale, save_dir):
     """
-    Generate and save templates for a trimesh model from N poses and save RGB + depth to disk.
+    Generate and save templates for a mesh from N poses and save RGB + depth to disk.
 
     Args:
-        trimesh_model : trimesh.Trimesh — trimesh model
+        mesh          : trimesh.Trimesh — mesh
         T_m2c         : (N, 4, 4)   — OpenCV world-to-camera matrices
         K             : (3, 3)      — camera intrinsics (fx, fy, cx, cy)
         width         : int         — image width
@@ -90,12 +87,15 @@ def generate_and_save_templates(trimesh_model, T_m2c, K, width, height, depth_sc
         save_dir/XXXX.png        (RGB, black background)
         save_dir/XXXX_depth.png  (uint16, scaled depth, 0=background)
     """
+    AMBIENT_LIGHT = 0.2
+    DIRECTIONAL_LIGHT = 5.0
+
     assert save_dir is not None, "save_dir must be provided"
     assert isinstance(save_dir, Path), "save_dir must be a Path object"
 
     save_dir.mkdir(parents=True, exist_ok=True)
 
-    mesh = pyrender.Mesh.from_trimesh(trimesh_model)
+    mesh = pyrender.Mesh.from_trimesh(mesh)
     scene = pyrender.Scene(bg_color=[0, 0, 0, 1], ambient_light=[AMBIENT_LIGHT] * 3)
     scene.add(mesh)
 
@@ -103,9 +103,7 @@ def generate_and_save_templates(trimesh_model, T_m2c, K, width, height, depth_sc
     cam_node = scene.add(
         pyrender.IntrinsicsCamera(K[0, 0], K[1, 1], K[0, 2], K[1, 2], znear=10.0, zfar=10000.0)
     )
-    # light_node = scene.add(
-    #     pyrender.DirectionalLight(color=[1, 1, 1], intensity=DIRECTIONAL_LIGHT)
-    # )
+    light_node = scene.add(pyrender.DirectionalLight(color=[1, 1, 1], intensity=DIRECTIONAL_LIGHT))
 
     r = pyrender.OffscreenRenderer(width, height)
     for i, m2c in enumerate(T_m2c):
@@ -117,15 +115,15 @@ def generate_and_save_templates(trimesh_model, T_m2c, K, width, height, depth_sc
 
         # update pose of camera and light
         scene.set_pose(cam_node, pose_gl)
-        # scene.set_pose(light_node, pose_gl)
+        scene.set_pose(light_node, pose_gl)
 
         rgb, depth = r.render(scene)
 
         # scale depth: mm to dataset units, store as uint16 PNG
         # uint16 range 0–65535 covers 0–65535 units (65m at 1mm resolution)
-        depth_uint16 = (depth / depth_scale).astype(np.uint16)
+        depth = (depth / depth_scale).astype(np.uint16)
 
         Image.fromarray(rgb).save(save_dir / f"{i:06d}.png")
-        Image.fromarray(depth_uint16).save(save_dir / f"{i:06d}_depth.png")
+        Image.fromarray(depth).save(save_dir / f"{i:06d}_depth.png")
 
     r.delete()

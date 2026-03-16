@@ -18,11 +18,11 @@ class TemplateDataset:
         # Load trimesh models and models_info
         with open(self.models_path / "models_info.json", "r") as f:
             self.models_info = json.load(f)
-        self.models = {}
 
+        self.models = {}
         for model_path in self.models_path.glob("*.ply"):
             object_id = int(model_path.stem.split("_")[1])
-            self.models[object_id] = trimesh.load(model_path)
+            self.models[object_id] = trimesh.load(model_path, process=False)
 
         if dataset_name == "ycbv":
             # Note: YCBV dataset has two cameras: "uw" and "cmu"
