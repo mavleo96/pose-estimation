@@ -3,10 +3,12 @@ from PIL import Image
 from pathlib import Path
 import json
 from torch.utils.data import Dataset
+import torchvision.transforms as transforms
+import torch
 
 
 class SceneDataset(Dataset):
-    def __init__(self, dataset_name, data_dir, split="test"):
+    def __init__(self, dataset_name, data_dir, split="test", rgb_transform=None):
         super().__init__()
         self.dataset_name = dataset_name
         self.split = split
@@ -17,6 +19,13 @@ class SceneDataset(Dataset):
         self.image_info = self.load_and_process_scene_image_info()
 
         self.data = list(self.image_info.values())  # list of image info
+
+        self.rgb_transform = rgb_transform or transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ]
+        )
 
     def load_and_process_scene_image_info(self):
         image_info = {}
@@ -35,7 +44,7 @@ class SceneDataset(Dataset):
                 camera_params = camera_info[str(image_id)]
 
                 image_info[image_key] = {
-                    "id": image_key,
+                    "image_key": image_key,
                     "scene_id": scene_id,
                     "image_id": image_id,
                     "cam_K": np.array(camera_params["cam_K"]).reshape(3, 3),
@@ -58,10 +67,10 @@ class SceneDataset(Dataset):
         depth = depth * record["depth_scale"]  # in mm
 
         return {
-            "id": record["id"],
+            "image_key": record["image_key"],
             "scene_id": record["scene_id"],
             "image_id": record["image_id"],
-            "rgb": rgb,
-            "depth": depth,
-            "cam_K": record["cam_K"],
+            "rgb": self.rgb_transform(rgb),
+            "depth": torch.from_numpy(depth),  # Note: depth is not yet normalized
+            "cam_K": torch.from_numpy(record["cam_K"]).float(),
         }

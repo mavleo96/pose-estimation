@@ -6,11 +6,19 @@ import cv2
 from torch.utils.data import Dataset
 from ..utils import rle_to_mask, get_pad_matrix, get_resize_matrix, get_crop_matrix
 from .utils import calculate_square_padding
+import torch
+import torchvision.transforms as transforms
 
 
 class QueryDataset(Dataset):
     def __init__(
-        self, dataset_name, data_dir, split="test", detections_path=None, query_size=(224, 224)
+        self,
+        dataset_name,
+        data_dir,
+        split="test",
+        detections_path=None,
+        query_size=(224, 224),
+        rgb_transform=None,
     ):
         super().__init__()
         self.dataset_name = dataset_name
@@ -24,6 +32,13 @@ class QueryDataset(Dataset):
         # Load data
         self.image_info = self.load_and_process_scene_image_info()
         self.detections = self.load_and_process_detections()
+
+        self.rgb_transform = rgb_transform or transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ]
+        )
 
     def load_and_process_scene_image_info(self):
         image_info = {}
@@ -42,7 +57,7 @@ class QueryDataset(Dataset):
                 camera_params = camera_info[str(image_id)]
 
                 image_info[image_key] = {
-                    "id": image_key,
+                    "image_key": image_key,
                     "scene_id": scene_id,
                     "image_id": image_id,
                     "cam_K": np.array(camera_params["cam_K"]).reshape(3, 3),
@@ -116,6 +131,9 @@ class QueryDataset(Dataset):
 
         return rgb, depth, M
 
+    def get_image_key(self, idx):
+        return f"{self.detections[idx]['scene_id']:06d}_{self.detections[idx]['image_id']:06d}"
+
     def __len__(self):
         return len(self.detections)
 
@@ -138,8 +156,8 @@ class QueryDataset(Dataset):
             "instance_id": record["instance_id"],
             "detection_score": record["score"],
             "detection_time": record["time"],
-            "rgb": rgb_query,
-            "depth": depth_query,
-            "M": M,
-            "cam_K": image_record["cam_K"],
+            "rgb": self.rgb_transform(rgb_query),
+            "depth": torch.from_numpy(depth_query),  # Note: depth is not yet normalized
+            "M": torch.from_numpy(M).float(),
+            "cam_K": torch.from_numpy(image_record["cam_K"]).float(),
         }
