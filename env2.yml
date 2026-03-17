@@ -116,6 +116,7 @@ dependencies:
       - psutil==7.2.2
       - ptyprocess==0.7.0
       - pure-eval==0.2.3
+      - pycocotools==2.0.11
       - pydantic==2.12.5
       - pydantic-core==2.41.5
       - pyglet==2.1.13

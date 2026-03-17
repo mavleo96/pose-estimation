@@ -21,6 +21,7 @@ pip install -U torch \
  PyOpenGL-accelerate \
  embreex \
  trimesh \
+ pycocotools \
  ipykernel \
  wandb \
  ruff \

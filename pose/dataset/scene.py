@@ -14,9 +14,12 @@ class SceneDataset(Dataset):
         self.data_path = Path(data_dir) / dataset_name / split
 
         # Load data
-        self.data = []
+        self.image_info = self.load_and_process_scene_image_info()
 
-        # Iterate over all scenes
+        self.data = list(self.image_info.values())  # list of image info
+
+    def load_and_process_scene_image_info(self):
+        image_info = {}
         for scene_path in self.data_path.iterdir():
             scene_id = int(scene_path.stem)  # "000002" -> 2
 
@@ -25,40 +28,40 @@ class SceneDataset(Dataset):
                 camera_info = json.load(f)
 
             # Iterate over all images
-            for image_path in (scene_path / "rgb").iterdir():
-                image_id = int(image_path.stem)  # "000001" -> 1
-                id = f"{scene_id:06d}_{image_id:06d}"  # 2, 1 -> "000002_000001"
+            for rgb_path in (scene_path / "rgb").iterdir():
+                image_id = int(rgb_path.stem)  # "000001" -> 1
+                image_key = f"{scene_id:06d}_{image_id:06d}"  # 2, 1 -> "000002_000001"
 
-                image_camera = camera_info[str(image_id)]
+                camera_params = camera_info[str(image_id)]
 
-                image_info = {
-                    "id": id,
+                image_info[image_key] = {
+                    "id": image_key,
                     "scene_id": scene_id,
-                    "view_id": image_id,
-                    "cam_K": np.array(image_camera["cam_K"]).reshape(3, 3),
-                    "depth_scale": image_camera["depth_scale"],
-                    "image_path": image_path,
-                    "depth_path": scene_path / "depth" / f"{image_path.stem}.png",
+                    "image_id": image_id,
+                    "cam_K": np.array(camera_params["cam_K"]).reshape(3, 3),
+                    "depth_scale": camera_params["depth_scale"],
+                    "rgb_path": rgb_path,
+                    "depth_path": scene_path / "depth" / f"{rgb_path.stem}.png",
                 }
 
-                self.data.append(image_info)
+        return image_info
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, index):
-        image_info = self.data[index]
+        record = self.data[index]
 
-        rgb = np.array(Image.open(image_info["image_path"]).convert("RGB"))
+        rgb = np.array(Image.open(record["rgb_path"]).convert("RGB"))
 
-        depth = np.array(Image.open(image_info["depth_path"])).astype(np.float32)
-        depth = depth * image_info["depth_scale"]  # in mm
+        depth = np.array(Image.open(record["depth_path"])).astype(np.float32)
+        depth = depth * record["depth_scale"]  # in mm
 
         return {
-            "id": image_info["id"],
-            "scene_id": image_info["scene_id"],
-            "view_id": image_info["view_id"],
+            "id": record["id"],
+            "scene_id": record["scene_id"],
+            "image_id": record["image_id"],
             "rgb": rgb,
             "depth": depth,
-            "cam_K": image_info["cam_K"],
+            "cam_K": record["cam_K"],
         }
