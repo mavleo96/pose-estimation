@@ -161,13 +161,16 @@ class PnPPoseEstimator:
 
 
 if __name__ == "__main__":
-    import trimesh
+    from pathlib import Path
+
     import numpy as np
+    import trimesh
+    from trimesh.ray.ray_pyembree import RayMeshIntersector
+
+    from _configs.constants import DATA_DIR
+
     from ..dataset.camera import CameraIntrinsic
     from ..dataset.render import look_at_matrix
-    from trimesh.ray.ray_pyembree import RayMeshIntersector
-    from pathlib import Path
-    from _configs.constants import DATA_DIR
 
     torch.manual_seed(42)
     np.random.seed(42)

@@ -1,13 +1,15 @@
 import json
 from pathlib import Path
-import numpy as np
-from PIL import Image
+
 import cv2
-from torch.utils.data import Dataset
-from ..utils import rle_to_mask, get_pad_matrix, get_resize_matrix, get_crop_matrix
-from .utils import calculate_square_padding
+import numpy as np
 import torch
 import torchvision.transforms as transforms
+from PIL import Image
+from torch.utils.data import Dataset
+
+from ..utils import get_crop_matrix, get_pad_matrix, get_resize_matrix, rle_to_mask
+from .utils import calculate_square_padding
 
 
 class QueryDataset(Dataset):
@@ -69,7 +71,7 @@ class QueryDataset(Dataset):
         return image_info
 
     def load_and_process_detections(self):
-        with open(self.detections_path, "r") as f:
+        with open(self.detections_path) as f:
             detections = json.load(f)
 
         detections.sort(key=lambda x: (x["scene_id"], x["image_id"], x["category_id"], -x["score"]))

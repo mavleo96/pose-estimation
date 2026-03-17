@@ -1,7 +1,8 @@
+from pathlib import Path
+
 import numpy as np
 import pyrender
 from PIL import Image
-from pathlib import Path
 
 
 def look_at_matrix(cam_pos, roll=1, target=None):

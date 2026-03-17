@@ -190,11 +190,14 @@ class KabschPoseEstimator:
 
 
 if __name__ == "__main__":
-    import trimesh
-    import numpy as np
-    from ..utils import euler_to_rotation_matrix
-    from _configs.constants import DATA_DIR
     from pathlib import Path
+
+    import numpy as np
+    import trimesh
+
+    from _configs.constants import DATA_DIR
+
+    from ..utils import euler_to_rotation_matrix
 
     torch.manual_seed(42)
     np.random.seed(42)

@@ -1,7 +1,8 @@
 import math
-from torch.utils.data import Sampler
-import torch
 from dataclasses import dataclass
+
+import torch
+from torch.utils.data import Sampler
 
 
 class ImageGroupedBatchSampler(Sampler):

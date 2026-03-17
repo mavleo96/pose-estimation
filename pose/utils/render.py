@@ -1,8 +1,9 @@
-import pyrender
 import numpy as np
+import pyrender
 
 
-# NOTE: this function has duplicate code with the generate_and_save_templates function in the dataset/render.py file
+# NOTE: this function has duplicate code with the generate_and_save_templates function in the
+# dataset/render.py file
 def render_view(
     mesh, T_m2c, K, width, height, depth_scale, ambient_light=0.2, directional_light=5.0
 ):

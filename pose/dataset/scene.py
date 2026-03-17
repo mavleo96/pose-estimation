@@ -1,10 +1,11 @@
-import numpy as np
-from PIL import Image
-from pathlib import Path
 import json
-from torch.utils.data import Dataset
-import torchvision.transforms as transforms
+from pathlib import Path
+
+import numpy as np
 import torch
+import torchvision.transforms as transforms
+from PIL import Image
+from torch.utils.data import Dataset
 
 
 class SceneDataset(Dataset):

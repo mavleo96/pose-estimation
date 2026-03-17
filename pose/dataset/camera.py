@@ -1,6 +1,7 @@
-from dataclasses import dataclass
-import numpy as np
 import json
+from dataclasses import dataclass
+
+import numpy as np
 
 
 @dataclass
@@ -19,7 +20,7 @@ class CameraIntrinsic:
 
     @classmethod
     def from_json(cls, path):
-        with open(path, "r") as f:
+        with open(path) as f:
             data = json.load(f)
 
         return cls(

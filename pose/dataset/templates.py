@@ -1,10 +1,11 @@
+import json
+from pathlib import Path
+
 import numpy as np
 import trimesh
-from pathlib import Path
-import json
 
-from .render import look_at_matrix, generate_and_save_templates
 from .camera import CameraIntrinsic
+from .render import generate_and_save_templates, look_at_matrix
 
 
 class TemplateDataset:
@@ -16,7 +17,7 @@ class TemplateDataset:
         self.models_path = Path(data_dir) / dataset_name / "models"
 
         # Load trimesh models and models_info
-        with open(self.models_path / "models_info.json", "r") as f:
+        with open(self.models_path / "models_info.json") as f:
             self.models_info = json.load(f)
 
         self.models = {}
