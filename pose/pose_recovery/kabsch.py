@@ -75,7 +75,6 @@ class KabschPoseEstimator:
 
         # RANSAC loop
         sample_probs = mask.float()
-
         for _ in range(self.max_iters):
             sample_idx = torch.multinomial(sample_probs, self.sample_size, replacement=False)
             sample_idx = sample_idx.unsqueeze(-1).expand(-1, -1, 3)

@@ -43,10 +43,12 @@ def precompute_embeddings(
     templates_path = Path(data_dir) / "templates" / dataset_name
 
     encoder.eval()
+
     embeddings_list = []
     M_list = []
     rgb_list = []
     depth_list = []
+
     for object_id in object_ids:
         template_dataset = TemplateViewDataset(templates_path, object_id, output_size, depth_scale)
         dataloader = DataLoader(
@@ -57,6 +59,7 @@ def precompute_embeddings(
         object_M_list = []
         object_rgb_list = []
         object_depth_list = []
+
         for batch in tqdm(dataloader, desc=f"precomputing embeddings for object {object_id:06d}"):
             rgb = batch["rgb"].to(encoder.device)
             with torch.no_grad():
@@ -110,6 +113,7 @@ def precompute_pca(embeddings_dir, pca):
     for i in range(embeddings.shape[0]):
         pca_embedding = pca(embeddings[i].to(pca.device))
         pca_embeddings_list.append(pca_embedding.cpu().numpy())
+
     pca_embeddings = np.stack(pca_embeddings_list, axis=0)
 
     np.save(embeddings_dir / "pca_embeddings.npy", pca_embeddings)

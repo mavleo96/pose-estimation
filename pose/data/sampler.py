@@ -1,5 +1,4 @@
 import math
-from dataclasses import dataclass
 
 import torch
 from torch.utils.data import Sampler
@@ -28,7 +27,6 @@ class ImageGroupedBatchSampler(Sampler):
         return sum(math.ceil(len(indices) / self.batch_size) for indices in self.groups.values())
 
 
-@dataclass
 class QueryDataCollator:
     def __call__(self, batch):
         # all items in batch share the same scene_id and image_id (ImageGroupedBatchSampler)
@@ -46,7 +44,6 @@ class QueryDataCollator:
         }
 
 
-@dataclass
 class SceneDataCollator:
     def __call__(self, batch):
         return {

@@ -77,6 +77,7 @@ class QueryDataset(Dataset):
         # add instance id to detections
         prev_key = None
         instance_id = 1
+
         for d in detections:
             if prev_key != f"{d['scene_id']}-{d['image_id']}-{d['category_id']}":
                 instance_id = 1

@@ -22,7 +22,6 @@ class PCA(nn.Module):
         assert x.shape[-1] == self.d
 
         x_cpu = x.reshape(-1, self.d).cpu()
-
         cov = x_cpu.T.cov()
         e, v = torch.linalg.eigh(cov)
 

@@ -18,7 +18,6 @@ class SceneDataset(Dataset):
 
         # Load data
         self.image_info = self.load_image_info()
-
         self.data = list(self.image_info.values())  # list of image info
 
         self.rgb_transform = rgb_transform or transforms.Compose(
