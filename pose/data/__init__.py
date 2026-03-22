@@ -1,12 +1,13 @@
-from .dataset import QueryDataset
+from .query import QueryDataset
 from .sampler import ImageGroupedBatchSampler, QueryDataCollator, SceneDataCollator
 from .scene import SceneDataset
-from .templates import TemplateDataset
+from .template import TemplateDataset, TemplateViewDataset
 
 __all__ = [
-    "TemplateDataset",
     "SceneDataset",
     "QueryDataset",
+    "TemplateDataset",
+    "TemplateViewDataset",
     "ImageGroupedBatchSampler",
     "QueryDataCollator",
     "SceneDataCollator",

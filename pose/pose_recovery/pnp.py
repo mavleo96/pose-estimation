@@ -169,13 +169,13 @@ if __name__ == "__main__":
 
     from _configs.constants import DATA_DIR
 
-    from ..dataset.camera import CameraIntrinsic
-    from ..dataset.render import look_at_matrix
+    from ..rendering.camera import CameraIntrinsic
+    from ..rendering.render import look_at_matrix
 
     torch.manual_seed(42)
     np.random.seed(42)
 
-    T = look_at_matrix(np.array([[100, -30, 500]]), roll=3)[1]
+    T = look_at_matrix(np.array([[100, -30, 500]]), n_roll=3)[1]
     R = torch.from_numpy(T[:3, :3]).float()
     t = torch.from_numpy(T[:3, 3]).float()
 

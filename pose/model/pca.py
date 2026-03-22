@@ -12,16 +12,23 @@ class PCA(nn.Module):
         self.register_buffer("v", torch.zeros(d, d))
         self.register_buffer("mean", torch.zeros(d))
 
+    @property
+    def device(self):
+        return self.e.device
+
+    @torch.no_grad()
     def fit(self, x):
         assert x.ndim > 1
         assert x.shape[-1] == self.d
 
-        cov = x.reshape(-1, self.d).T.cov()
+        x_cpu = x.reshape(-1, self.d).cpu()
+
+        cov = x_cpu.T.cov()
         e, v = torch.linalg.eigh(cov)
 
-        self.v.data = v
-        self.e.data = e
-        self.mean.data = x.reshape(-1, self.d).mean(0)
+        self.v.data = v.to(self.device)
+        self.e.data = e.to(self.device)
+        self.mean.data = x_cpu.mean(0).to(self.device)
 
     def forward(self, x):
         assert x.ndim > 1

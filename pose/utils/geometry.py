@@ -110,6 +110,15 @@ def get_resize_matrix(src_size, dst_size):
     )
 
 
+__all__ = [
+    "euler_to_rotation_matrix",
+    "rotation_matrix_to_euler",
+    "transform_from_Rt",
+    "get_crop_matrix",
+    "get_pad_matrix",
+    "get_resize_matrix",
+]
+
 if __name__ == "__main__":
     # euler to rotation matrix test
     print("euler_to_rotation_matrix test:")
@@ -117,14 +126,12 @@ if __name__ == "__main__":
     pitch = torch.tensor([torch.pi / 6, torch.pi / 2])
     yaw = torch.tensor([torch.pi / 4, torch.pi / 2])
     print(
-        (f"roll[0]: {roll[0].item():.3f}, pitch[0]: {pitch[0].item():.3f},")(
-            f" yaw[0]: {yaw[0].item():.3f}"
-        )
+        f"roll[0]: {roll[0].item():.3f}, pitch[0]: {pitch[0].item():.3f},"
+        f" yaw[0]: {yaw[0].item():.3f}"
     )
     print(
-        (f"roll[1]: {roll[1].item():.3f}, pitch[1]: {pitch[1].item():.3f},")(
-            f" yaw[1]: {yaw[1].item():.3f}"
-        )
+        f"roll[1]: {roll[1].item():.3f}, pitch[1]: {pitch[1].item():.3f},"
+        f" yaw[1]: {yaw[1].item():.3f}"
     )
 
     R = euler_to_rotation_matrix(roll, pitch, yaw)
@@ -137,12 +144,10 @@ if __name__ == "__main__":
     print("\nrotation_matrix_to_euler test:")
     roll_est, pitch_est, yaw_est = rotation_matrix_to_euler(R)
     print(
-        (f"roll_est[0]: {roll_est[0].item():.3f}, pitch_est[0]: {pitch_est[0].item():.3f},")(
-            f" yaw_est[0]: {yaw_est[0].item():.3f}"
-        )
+        f"roll_est[0]: {roll_est[0].item():.3f}, pitch_est[0]: {pitch_est[0].item():.3f},"
+        f" yaw_est[0]: {yaw_est[0].item():.3f}"
     )
     print(
-        (f"roll_est[1]: {roll_est[1].item():.3f}, pitch_est[1]: {pitch_est[1].item():.3f},")(
-            f" yaw_est[1]: {yaw_est[1].item():.3f}"
-        )
+        f"roll_est[1]: {roll_est[1].item():.3f}, pitch_est[1]: {pitch_est[1].item():.3f},"
+        f" yaw_est[1]: {yaw_est[1].item():.3f}"
     )

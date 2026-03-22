@@ -98,7 +98,7 @@ class KabschPoseEstimator:
                 best_R[ids] = R_hyp[ids]
                 best_t[ids] = t_hyp[ids]
 
-        # Refit using inliners
+        # Refit using inliers
         est_pts = einsum(best_R, src_pts, "b dt ds, b n ds -> b n dt") + best_t.unsqueeze(1)
         errors = torch.norm(est_pts - tgt_pts, dim=2)
         inlier_mask = (errors < self.inlier_thresh) & mask
@@ -197,7 +197,7 @@ if __name__ == "__main__":
 
     from _configs.constants import DATA_DIR
 
-    from ..utils import euler_to_rotation_matrix
+    from ..utils.geometry import euler_to_rotation_matrix
 
     torch.manual_seed(42)
     np.random.seed(42)
@@ -208,10 +208,6 @@ if __name__ == "__main__":
         torch.tensor([3 * torch.pi / 4]),
     )
     t = torch.tensor([120, -30, 600], dtype=torch.float32).unsqueeze(0)
-    T = torch.eye(4, device=R.device, dtype=R.dtype).unsqueeze(0).expand(R.shape[0], -1, -1)
-    T[:, :3, :3] = R
-    T[:, :3, 3] = t
-    T[:, 3, 3] = 1.0
 
     print(f"R: {R.round(decimals=2)}")
     print(f"t: {t.round(decimals=2)}")

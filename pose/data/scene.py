@@ -17,7 +17,7 @@ class SceneDataset(Dataset):
         self.data_path = Path(data_dir) / dataset_name / split
 
         # Load data
-        self.image_info = self.load_and_process_scene_image_info()
+        self.image_info = self.load_image_info()
 
         self.data = list(self.image_info.values())  # list of image info
 
@@ -28,7 +28,7 @@ class SceneDataset(Dataset):
             ]
         )
 
-    def load_and_process_scene_image_info(self):
+    def load_image_info(self):
         image_info = {}
         for scene_path in self.data_path.iterdir():
             scene_id = int(scene_path.stem)  # "000002" -> 2

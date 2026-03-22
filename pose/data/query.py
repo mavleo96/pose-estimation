@@ -1,15 +1,13 @@
 import json
 from pathlib import Path
 
-import cv2
 import numpy as np
 import torch
 import torchvision.transforms as transforms
 from PIL import Image
 from torch.utils.data import Dataset
 
-from ..utils import get_crop_matrix, get_pad_matrix, get_resize_matrix, rle_to_mask
-from .utils import calculate_square_padding
+from .utils import process_rgb_and_depth, rle_to_mask
 
 
 class QueryDataset(Dataset):
@@ -17,9 +15,9 @@ class QueryDataset(Dataset):
         self,
         dataset_name,
         data_dir,
+        detections_path,
+        output_size,
         split="test",
-        detections_path=None,
-        query_size=(224, 224),
         rgb_transform=None,
     ):
         super().__init__()
@@ -29,11 +27,11 @@ class QueryDataset(Dataset):
         self.data_path = Path(data_dir) / dataset_name / split
         self.detections_path = Path(detections_path)
 
-        self.query_size = query_size
+        self.output_size = output_size
 
         # Load data
-        self.image_info = self.load_and_process_scene_image_info()
-        self.detections = self.load_and_process_detections()
+        self.image_info = self.load_image_info()
+        self.detections = self.load_detections()
 
         self.rgb_transform = rgb_transform or transforms.Compose(
             [
@@ -42,7 +40,7 @@ class QueryDataset(Dataset):
             ]
         )
 
-    def load_and_process_scene_image_info(self):
+    def load_image_info(self):
         image_info = {}
         for scene_path in self.data_path.iterdir():
             scene_id = int(scene_path.stem)  # "000002" -> 2
@@ -70,7 +68,7 @@ class QueryDataset(Dataset):
 
         return image_info
 
-    def load_and_process_detections(self):
+    def load_detections(self):
         with open(self.detections_path) as f:
             detections = json.load(f)
 
@@ -89,67 +87,25 @@ class QueryDataset(Dataset):
 
         return detections
 
-    def process_query(self, rgb, depth, mask, bbox):
-        # mask the rgb and depth
-        rgb = np.where(mask[..., None], rgb, 0)
-        depth = np.where(mask, depth, 0)
-
-        x, y, w, h = bbox
-        padding = calculate_square_padding(w, h)
-
-        # 1. crop using the bbox
-        # 2. pad the cropped image to make it square
-        # 3. resize the padded image to the query size
-        # Note: square padding is wrong if query_size is not square
-        rgb = rgb[y : y + h, x : x + w]
-        rgb = np.pad(
-            rgb,
-            (
-                (padding[1], padding[3]),
-                (padding[0], padding[2]),
-                (0, 0),
-            ),
-        )
-        src_size = rgb.shape[:2]
-        # cv2 resize expects (W, H) convention
-        rgb = cv2.resize(rgb, self.query_size[::-1], interpolation=cv2.INTER_LINEAR)
-
-        depth = depth[y : y + h, x : x + w]
-        depth = np.pad(
-            depth,
-            (
-                (padding[1], padding[3]),
-                (padding[0], padding[2]),
-            ),
-        )
-        depth = cv2.resize(depth, self.query_size[::-1], interpolation=cv2.INTER_NEAREST)
-
-        # compute the transformation matrix
-        T_crop = get_crop_matrix(bbox)
-        T_pad = get_pad_matrix(padding)
-        T_resize = get_resize_matrix(src_size, self.query_size)
-
-        M = T_resize @ T_pad @ T_crop
-
-        return rgb, depth, M
-
     def get_image_key(self, idx):
-        return f"{self.detections[idx]['scene_id']:06d}_{self.detections[idx]['image_id']:06d}"
+        record = self.detections[idx]
+        return f"{record['scene_id']:06d}_{record['image_id']:06d}"
 
     def __len__(self):
         return len(self.detections)
 
     def __getitem__(self, idx):
         record = self.detections[idx]
-        image_record = self.image_info[f"{record['scene_id']:06d}_{record['image_id']:06d}"]
+        image_record = self.image_info[self.get_image_key(idx)]
 
         rgb = np.array(Image.open(image_record["rgb_path"]).convert("RGB"))
         mask = rle_to_mask(record["segmentation"])
+        bbox = record["bbox"]
 
         depth = np.array(Image.open(image_record["depth_path"])).astype(np.float32)
         depth = depth * image_record["depth_scale"]  # in mm
 
-        rgb_query, depth_query, M = self.process_query(rgb, depth, mask, record["bbox"])
+        rgb_query, depth_query, M = process_rgb_and_depth(rgb, depth, bbox, self.output_size, mask)
 
         return {
             "scene_id": record["scene_id"],

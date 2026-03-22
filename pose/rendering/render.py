@@ -5,28 +5,28 @@ import pyrender
 from PIL import Image
 
 
-def look_at_matrix(cam_pos, roll=1, target=None):
+def look_at_matrix(cam_pos, n_roll=1, target=None):
     """
     Compute OpenCV world-to-camera matrix from camera position and target point.
 
     Coordinate convention (OpenCV):
         +X right, +Y down, +Z forward (into scene)
 
-    No in-plane rotation by default (roll=1): world-Z is used as up reference,
+    No in-plane rotation by default (n_roll=1): world-Z is used as up reference,
     (BOP convention: Z-up world frame), falls back to world-Y near poles
     (when forward ≈ ±world-Z).
 
     Args:
         cam_pos : (N, 3) camera position(s) in world space
-        roll    : int              number of in-plane rotations evenly spaced
-                                   over [0, 2π). roll=1 → upright only.
+        n_roll  : int    number of in-plane rotations evenly spaced
+                         over [0, 2π). n_roll=1 → upright only.
         target  : (3,) look-at point, default origin
 
     Returns:
-        (N * roll, 4, 4) float64 w2c matrices
+        (N * n_roll, 4, 4) float64 w2c matrices
     """
     assert cam_pos.ndim == 2 and cam_pos.shape[1] == 3
-    assert 0 < roll <= 36
+    assert 0 < n_roll <= 36
 
     N = len(cam_pos)
 
@@ -36,12 +36,12 @@ def look_at_matrix(cam_pos, roll=1, target=None):
         target = np.broadcast_to(target, (N, 3)).copy()
 
     # generate k roll angles evenly spaced over [0, 2π)
-    roll_angles = np.linspace(0, 2 * np.pi, roll, endpoint=False)  # (k,)
+    roll = np.linspace(0, 2 * np.pi, n_roll, endpoint=False)  # (k,)
 
     # repeat each position/target for each roll angle
-    cam_pos = np.repeat(cam_pos, roll, axis=0)  # (N, 3) -> (N*k, 3)
-    target = np.repeat(target, roll, axis=0)  # (N, 3) -> (N*k, 3)
-    roll = np.tile(roll_angles, N)  # (k,) -> (N*k,)
+    cam_pos = np.repeat(cam_pos, n_roll, axis=0)  # (N, 3) -> (N*k, 3)
+    target = np.repeat(target, n_roll, axis=0)  # (N, 3) -> (N*k, 3)
+    roll_per_view = np.tile(roll, N)  # (k,) -> (N*k,)
 
     # unit vector from camera to target -> camera +Z axis
     fwd = target - cam_pos
@@ -57,7 +57,7 @@ def look_at_matrix(cam_pos, roll=1, target=None):
     down = np.cross(fwd, right)
 
     # rotate right/down around fwd by roll — 2D rotation in the image plane
-    c, s = np.cos(roll)[:, None], np.sin(roll)[:, None]
+    c, s = np.cos(roll_per_view)[:, None], np.sin(roll_per_view)[:, None]
     right, down = c * right + s * down, -s * right + c * down
 
     # rows of R are the camera axes; t = -R @ cam_pos moves world origin to camera frame

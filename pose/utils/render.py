@@ -4,6 +4,7 @@ import pyrender
 
 # NOTE: this function has duplicate code with the generate_and_save_templates function in the
 # dataset/render.py file
+# This is purely for external usage for visualization purposes.
 def render_view(
     mesh, T_m2c, K, width, height, depth_scale, ambient_light=0.2, directional_light=5.0
 ):
@@ -53,3 +54,6 @@ def render_view(
     depth = (depth / depth_scale).astype(np.uint16)
 
     return rgb, depth
+
+
+__all__ = ["render_view"]

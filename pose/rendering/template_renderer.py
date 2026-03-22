@@ -1,14 +1,21 @@
-import json
 from pathlib import Path
 
 import numpy as np
 import trimesh
 
+from ..utils.io import load_models_info
 from .camera import CameraIntrinsic
 from .render import generate_and_save_templates, look_at_matrix
 
 
-class TemplateDataset:
+class TemplateRenderer:
+    """
+    Class for rendering templates for a given dataset.
+    """
+
+    TARGET_FILL = 0.8
+    SUBDIVISIONS = 2
+
     def __init__(self, dataset_name, data_dir):
         self.dataset_name = dataset_name
 
@@ -16,37 +23,38 @@ class TemplateDataset:
         self.templates_path = Path(data_dir) / "templates" / dataset_name
         self.models_path = Path(data_dir) / dataset_name / "models"
 
-        # Load trimesh models and models_info
-        with open(self.models_path / "models_info.json") as f:
-            self.models_info = json.load(f)
+        # Load models_info
+        self.models_info = load_models_info(self.models_path / "models_info.json")
+        self.object_ids = sorted(self.models_info.keys())
 
-        self.models = {}
-        for model_path in self.models_path.glob("*.ply"):
-            object_id = int(model_path.stem.split("_")[1])
-            self.models[object_id] = trimesh.load(model_path, process=False)
-
-        if dataset_name == "ycbv":
+        # Load camera intrinsics
+        if self.dataset_name == "ycbv":
             # Note: YCBV dataset has two cameras: "uw" and "cmu"
             self.camera = CameraIntrinsic.from_json(
-                self.data_path / dataset_name / "camera_uw.json"
+                self.data_path / self.dataset_name / "camera_uw.json"
             )
         else:
-            self.camera = CameraIntrinsic.from_json(self.data_path / dataset_name / "camera.json")
+            self.camera = CameraIntrinsic.from_json(
+                self.data_path / self.dataset_name / "camera.json"
+            )
 
-        self.precompute_poses_and_templates()
-
-    def precompute_poses_and_templates(self):
-        TARGET_FILL = 0.8
-        DIST_MULT = self.camera.fx / (TARGET_FILL * self.camera.height / 2)
+    def render_templates(self):
+        # Create directories
+        self.templates_path.mkdir(parents=True, exist_ok=True)
         (self.templates_path / "object_poses").mkdir(parents=True, exist_ok=True)
 
+        # Compute distance multiplier
+        dist_mult = self.camera.fx / (self.TARGET_FILL * self.camera.height / 2)
+
         # unit icosphere vertices; subdivisions=2 gives 162 uniformly distributed viewpoints
-        sphere = trimesh.creation.icosphere(subdivisions=2)
+        sphere = trimesh.creation.icosphere(subdivisions=self.SUBDIVISIONS)
         vertices = np.array(sphere.vertices)
 
-        for object_id, model in self.models.items():
-            radius = self.models_info[str(object_id)]["diameter"] / 2
-            cam_pos = vertices * radius * DIST_MULT
+        for object_id in self.object_ids:
+            model = trimesh.load(self.models_path / f"obj_{object_id:06d}.ply", process=False)
+
+            radius = self.models_info[object_id]["diameter"] / 2
+            cam_pos = vertices * radius * dist_mult
 
             # compute w2c matrices for all 162 viewpoints
             T_m2c = look_at_matrix(cam_pos)
