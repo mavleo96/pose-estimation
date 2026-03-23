@@ -3,8 +3,7 @@ from pathlib import Path
 import numpy as np
 import trimesh
 
-from ..utils.io import load_models_info
-from .camera import CameraIntrinsic
+from ..utils.io import load_camera_intrinsics, load_models_info
 from .render import generate_and_save_templates, look_at_matrix
 
 
@@ -24,19 +23,11 @@ class TemplateRenderer:
         self.models_path = Path(data_dir) / dataset_name / "models"
 
         # Load models_info
-        self.models_info = load_models_info(self.models_path / "models_info.json")
+        self.models_info = load_models_info(self.models_path)
         self.object_ids = sorted(self.models_info.keys())
 
         # Load camera intrinsics
-        if self.dataset_name == "ycbv":
-            # Note: YCBV dataset has two cameras: "uw" and "cmu"
-            self.camera = CameraIntrinsic.from_json(
-                self.data_path / self.dataset_name / "camera_uw.json"
-            )
-        else:
-            self.camera = CameraIntrinsic.from_json(
-                self.data_path / self.dataset_name / "camera.json"
-            )
+        self.camera = load_camera_intrinsics(self.dataset_name, self.data_path)
 
     def render_templates(self):
         # Create directories

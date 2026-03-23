@@ -61,11 +61,11 @@ def precompute_embeddings(
         object_depth_list = []
 
         for batch in tqdm(dataloader, desc=f"precomputing embeddings for object {object_id:06d}"):
-            rgb = batch["rgb"].to(encoder.device)
+            rgb = batch["rgb"].to(encoder.device, dtype=encoder.dtype)
             with torch.no_grad():
                 patch_embeddings = encoder(rgb)["patch_embeddings"]
 
-            object_embeddings_list.append(patch_embeddings.cpu().numpy())
+            object_embeddings_list.append(patch_embeddings.float().cpu().numpy())
             object_M_list.append(batch["M"].numpy())
             object_rgb_list.append(batch["rgb"].numpy())
             object_depth_list.append(batch["depth"].numpy())
@@ -101,7 +101,7 @@ def precompute_pca(embeddings_dir, pca):
 
     Saves:
         embeddings_dir/pca_embeddings.npy — (N_objects, N_views, N_patches, D_pca) float32
-        embeddings_dir/pca.npz            — PCA state dict (mean, eigenvectors)
+        embeddings_dir/pca.pt             — PCA state dict (mean, eigenvectors)
     """
     embeddings_dir = Path(embeddings_dir)
 
@@ -111,12 +111,10 @@ def precompute_pca(embeddings_dir, pca):
 
     pca_embeddings_list = []
     for i in range(embeddings.shape[0]):
-        pca_embedding = pca(embeddings[i].to(pca.device))
-        pca_embeddings_list.append(pca_embedding.cpu().numpy())
+        pca_embedding = pca(embeddings[i].to(pca.device, dtype=pca.dtype))
+        pca_embeddings_list.append(pca_embedding.float().cpu().numpy())
 
     pca_embeddings = np.stack(pca_embeddings_list, axis=0)
 
     np.save(embeddings_dir / "pca_embeddings.npy", pca_embeddings)
-    np.savez(
-        embeddings_dir / "pca.npz", **{k: v.cpu().numpy() for k, v in pca.state_dict().items()}
-    )
+    torch.save(pca.state_dict(), embeddings_dir / "pca.pt")

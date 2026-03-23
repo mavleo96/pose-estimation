@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import pycocotools.mask as pycoco_mask_utils
 
-from ..utils.geometry import get_crop_matrix, get_pad_matrix, get_resize_matrix
+from ..utils.image import get_crop_matrix, get_pad_matrix, get_resize_matrix
 
 
 def rle_to_mask(segmentation):

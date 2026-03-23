@@ -6,7 +6,7 @@ import torchvision.transforms as transforms
 from PIL import Image
 from torch.utils.data import Dataset
 
-from ..utils.io import load_models_info
+from ..utils.io import load_camera_intrinsics, load_models_info
 from .utils import get_bbox, process_rgb_and_depth
 
 
@@ -32,8 +32,12 @@ class TemplateDataset:
         self.models_path = Path(data_dir) / dataset_name / "models"
         self.embeddings_dir = Path(embeddings_dir)
 
+        # Load camera intrinsics
+        camera = load_camera_intrinsics(self.dataset_name, Path(data_dir))
+        self.cam_K = torch.from_numpy(camera.K).float()
+
         # Load models_info
-        self.models_info = load_models_info(self.models_path / "models_info.json")
+        self.models_info = load_models_info(self.models_path)
         self.object_ids = sorted(self.models_info.keys())
 
         # Load object poses

@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 from kornia.geometry.conversions import (
     euler_from_quaternion,
@@ -57,66 +56,10 @@ def transform_from_Rt(R, t):
     return T
 
 
-def get_crop_matrix(bbox):
-    """
-    bbox: (x, y, w, h)
-    Returns:
-        M: (3, 3) transformation matrix mapping from original image to cropped image
-    """
-    x, y, _, _ = bbox
-    return np.array(
-        [
-            [1, 0, -x],
-            [0, 1, -y],
-            [0, 0, 1],
-        ],
-        dtype=float,
-    )
-
-
-def get_pad_matrix(pad):
-    """
-    pad: (left, upper, right, lower)
-    Returns:
-        M: (3, 3) transformation matrix mapping from original image to padded image
-    """
-    left, upper, _, _ = pad
-    return np.array(
-        [
-            [1, 0, left],
-            [0, 1, upper],
-            [0, 0, 1],
-        ],
-        dtype=float,
-    )
-
-
-def get_resize_matrix(src_size, dst_size):
-    """
-    src_size: (H, W)
-    dst_size: (H, W)
-    Returns:
-        M: (3, 3) transformation matrix mapping from original image to resized image
-    """
-    sh, sw = src_size
-    dh, dw = dst_size
-    return np.array(
-        [
-            [dw / sw, 0, 0],
-            [0, dh / sh, 0],
-            [0, 0, 1],
-        ],
-        dtype=float,
-    )
-
-
 __all__ = [
     "euler_to_rotation_matrix",
     "rotation_matrix_to_euler",
     "transform_from_Rt",
-    "get_crop_matrix",
-    "get_pad_matrix",
-    "get_resize_matrix",
 ]
 
 if __name__ == "__main__":
