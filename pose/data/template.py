@@ -28,16 +28,16 @@ class TemplateDataset:
     def __init__(self, dataset_name, data_dir, embeddings_dir):
         self.dataset_name = dataset_name
 
+        self.data_path = Path(data_dir) / dataset_name
         self.templates_path = Path(data_dir) / "templates" / dataset_name
-        self.models_path = Path(data_dir) / dataset_name / "models"
         self.embeddings_dir = Path(embeddings_dir)
 
         # Load camera intrinsics
-        camera = load_camera_intrinsics(self.dataset_name, Path(data_dir))
+        camera = load_camera_intrinsics(self.dataset_name, self.data_path)
         self.cam_K = torch.from_numpy(camera.K).float()
 
         # Load models_info
-        self.models_info = load_models_info(self.models_path)
+        self.models_info = load_models_info(self.data_path / "models")
         self.object_ids = sorted(self.models_info.keys())
 
         # Load object poses
@@ -57,6 +57,7 @@ class TemplateDataset:
             self.rgb = torch.from_numpy(f["rgb"]).float()
             self.depth = torch.from_numpy(f["depth"]).float()
             self.M = torch.from_numpy(f["M"]).float()
+            self.mask = torch.from_numpy(f["mask"]).bool()
 
     def get_index(self, object_id):
         if isinstance(object_id, list):
@@ -71,6 +72,7 @@ class TemplateDataset:
         return {
             "rgb": self.rgb[index],
             "depth": self.depth[index],
+            "mask": self.mask[index],
             "M": self.M[index],
             "T_m2c": self.T_m2c[index],
             "embedding": self.embeddings[index],
@@ -108,9 +110,11 @@ class TemplateViewDataset(Dataset):
         depth = np.array(Image.open(depth_path)).astype(np.float32) * self.depth_scale
         bbox = get_bbox(rgb)
         rgb, depth, M = process_rgb_and_depth(rgb, depth, bbox, self.output_size)
+        mask = depth > 0
 
         return {
             "rgb": self.rgb_transform(rgb),
             "depth": torch.from_numpy(depth).float(),
+            "mask": torch.from_numpy(mask).bool(),
             "M": torch.from_numpy(M).float(),
         }

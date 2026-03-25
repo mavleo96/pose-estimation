@@ -26,12 +26,27 @@ class PnPPoseEstimator:
             RANSAC result is kept silently. Default: True.
     """
 
-    def __init__(self, inlier_thresh=8.0, confidence=0.99, max_iters=1000, refine=True):
+    def __init__(
+        self,
+        inlier_thresh=8.0,
+        confidence=0.99,
+        max_iters=1000,
+        refine=True,
+        solver=cv2.SOLVEPNP_ITERATIVE,
+    ):
         self.inlier_thresh = inlier_thresh
         self.confidence = confidence
         self.max_iters = max_iters
         self.refine = refine
         self.min_points = 4  # cv2 PnP hard minimum
+        self.solver = solver
+
+    def __repr__(self):
+        return (
+            f"PnPPoseEstimator(inlier_thresh={self.inlier_thresh}, confidence={self.confidence},"
+            f" max_iters={self.max_iters}, refine={self.refine}, min_point={self.min_points},"
+            f" solver={self.solver})"
+        )
 
     def estimate_pose(self, pts3d, pts2d, K, mask=None):
         """
@@ -117,7 +132,7 @@ class PnPPoseEstimator:
                 iterationsCount=self.max_iters,
                 reprojectionError=self.inlier_thresh,
                 confidence=self.confidence,
-                flags=cv2.SOLVEPNP_SQPNP,
+                flags=self.solver,
             )
 
             if not success or rvec is None:
@@ -169,8 +184,8 @@ if __name__ == "__main__":
 
     from _configs.constants import DATA_DIR
 
-    from ..rendering.camera import CameraIntrinsic
     from ..rendering.render import look_at_matrix
+    from ..utils.camera import CameraIntrinsic
 
     torch.manual_seed(42)
     np.random.seed(42)
@@ -236,6 +251,7 @@ if __name__ == "__main__":
     pose_estimator = PnPPoseEstimator(
         inlier_thresh=10.0, confidence=0.99, max_iters=1000, refine=True
     )
+    print(pose_estimator)
 
     R_est, t_est, score = pose_estimator.estimate_pose(pts3d, pts2d, K)
     R_est, t_est, score = R_est[0], t_est[0], score[0]

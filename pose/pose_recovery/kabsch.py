@@ -16,14 +16,20 @@ class KabschPoseEstimator:
         inlier_thresh (float): Residual threshold (same units as input
             points) below which a correspondence is considered an inlier.
             For BOP-format datasets where points are in millimetres a
-            value in the range 5–15 mm is typical; the default of 10.0
-            is a reasonable starting point. Default: 10.0.
+            value in the range 5–15 mm is typical; the default of 100.0
+            seems reasonable based on experiments. Default: 100.0.
     """
 
-    def __init__(self, max_iters=1000, inlier_thresh=10.0) -> None:
+    def __init__(self, max_iters=1000, inlier_thresh=100.0) -> None:
         self.max_iters = max_iters
         self.inlier_thresh = inlier_thresh
         self.sample_size = 3
+
+    def __repr__(self):
+        return (
+            f"KabschPoseEstimator(max_iters={self.max_iters}, inlier_thresh={self.inlier_thresh},"
+            f" sample_size={self.sample_size})"
+        )
 
     def estimate_pose(self, src_pts, tgt_pts, mask=None):
         """
@@ -236,6 +242,7 @@ if __name__ == "__main__":
         return torch.acos(cos_theta)
 
     pose_estimator = KabschPoseEstimator(inlier_thresh=100.0)
+    print(pose_estimator)
 
     R_est, t_est, score = pose_estimator.estimate_pose(src_pts, tgt_pts, mask)
     print(f"R_est: {R_est.round(decimals=2)}")

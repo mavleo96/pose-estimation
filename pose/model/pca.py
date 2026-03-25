@@ -12,6 +12,9 @@ class PCA(nn.Module):
         self.register_buffer("v", torch.zeros(d, d))
         self.register_buffer("mean", torch.zeros(d))
 
+    def __repr__(self):
+        return f"PCA(d={self.d}, n_components={self.n_components})"
+
     @property
     def device(self):
         return self.e.device

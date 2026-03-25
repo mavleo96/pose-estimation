@@ -107,6 +107,7 @@ class QueryDataset(Dataset):
         depth = depth * image_record["depth_scale"]  # in mm
 
         rgb_query, depth_query, M = process_rgb_and_depth(rgb, depth, bbox, self.output_size, mask)
+        mask_query = depth_query > 0
 
         return {
             "scene_id": record["scene_id"],
@@ -117,6 +118,7 @@ class QueryDataset(Dataset):
             "detection_time": record["time"],
             "rgb": self.rgb_transform(rgb_query),
             "depth": torch.from_numpy(depth_query),  # Note: depth is not yet normalized
+            "mask": torch.from_numpy(mask_query).bool(),
             "M": torch.from_numpy(M).float(),
             "cam_K": torch.from_numpy(image_record["cam_K"]).float(),
         }

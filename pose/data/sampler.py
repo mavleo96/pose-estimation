@@ -37,6 +37,7 @@ class QueryDataCollator:
             "instance_id": [item["instance_id"] for item in batch],
             "rgb": torch.stack([item["rgb"] for item in batch]),
             "depth": torch.stack([item["depth"] for item in batch]),
+            "mask": torch.stack([item["mask"] for item in batch]),
             "M": torch.stack([item["M"] for item in batch]),
             "cam_K": torch.stack([item["cam_K"] for item in batch]),
             "detection_score": [item["detection_score"] for item in batch],

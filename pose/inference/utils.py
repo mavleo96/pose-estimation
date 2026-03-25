@@ -48,6 +48,7 @@ def precompute_embeddings(
     M_list = []
     rgb_list = []
     depth_list = []
+    mask_list = []
 
     for object_id in object_ids:
         template_dataset = TemplateViewDataset(templates_path, object_id, output_size, depth_scale)
@@ -59,6 +60,7 @@ def precompute_embeddings(
         object_M_list = []
         object_rgb_list = []
         object_depth_list = []
+        object_mask_list = []
 
         for batch in tqdm(dataloader, desc=f"precomputing embeddings for object {object_id:06d}"):
             rgb = batch["rgb"].to(encoder.device, dtype=encoder.dtype)
@@ -69,24 +71,28 @@ def precompute_embeddings(
             object_M_list.append(batch["M"].numpy())
             object_rgb_list.append(batch["rgb"].numpy())
             object_depth_list.append(batch["depth"].numpy())
+            object_mask_list.append(batch["mask"].numpy())
 
         object_embeddings = np.concat(object_embeddings_list, axis=0)
         object_M = np.concat(object_M_list, axis=0)
         object_rgb = np.concat(object_rgb_list, axis=0)
         object_depth = np.concat(object_depth_list, axis=0)
+        object_mask = np.concat(object_mask_list, axis=0)
 
         embeddings_list.append(object_embeddings)
         M_list.append(object_M)
         rgb_list.append(object_rgb)
         depth_list.append(object_depth)
+        mask_list.append(object_mask)
 
     embeddings = np.stack(embeddings_list, axis=0)
     M = np.stack(M_list, axis=0)
     rgb = np.stack(rgb_list, axis=0)
     depth = np.stack(depth_list, axis=0)
+    mask = np.stack(mask_list, axis=0)
 
     np.save(embeddings_dir / "embeddings.npy", embeddings)
-    np.savez(embeddings_dir / "templates.npz", M=M, rgb=rgb, depth=depth)
+    np.savez(embeddings_dir / "templates.npz", M=M, rgb=rgb, depth=depth, mask=mask)
 
 
 def precompute_pca(embeddings_dir, pca):

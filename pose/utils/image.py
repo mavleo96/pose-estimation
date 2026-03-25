@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from einops import rearrange
 
 
@@ -14,14 +15,44 @@ def patchify(x, patch_size):
     )
 
 
-def depth_to_patch_mask(depth, patch_size):
+def make_pixel_grid(h, w, device="cpu"):
     """
-    depth: (..., H, W)
+    h: int
+    w: int
+    device: torch.device or str
+    Returns:
+        (h, w, 2) in pixel coordinates
+    """
+    xs = torch.arange(w, device=device)
+    ys = torch.arange(h, device=device)
+    xs, ys = torch.meshgrid(xs, ys, indexing="xy")
+    return torch.stack([xs, ys], dim=-1)
+
+
+def sample_patch_centers(x, patch_size):
+    """
+    x: (..., H, W)
     patch_size: int
     Returns:
-        (..., N) where N = (H/P) * (W/P)
+        (..., h, w) where h = H/P and w = W/P
     """
-    return patchify(depth.unsqueeze(-3), patch_size).gt(0).any(dim=-1)
+    return x[..., patch_size // 2 :: patch_size, patch_size // 2 :: patch_size]
+
+
+def apply_inverse_homography(pts2d, M):
+    """
+    find pts s.t. M * pts = pts2d
+
+    pts2d: (..., N, 2)
+    M:     (..., 3, 3)
+    Returns:
+           (..., N, 2)
+    """
+    ones = torch.ones_like(pts2d[..., :1], device=pts2d.device, dtype=pts2d.dtype)
+    pts2d_h = torch.cat([pts2d, ones], dim=-1)  # (..., N, 3)
+    result = torch.linalg.solve(M, pts2d_h.transpose(-2, -1))  # (..., 3, N)
+    result = result.transpose(-2, -1)  # (..., N, 3)
+    return result[..., :2] / result[..., 2:3]  # (..., N, 2)
 
 
 def get_crop_matrix(bbox):
@@ -79,7 +110,9 @@ def get_resize_matrix(src_size, dst_size):
 
 __all__ = [
     "patchify",
-    "depth_to_patch_mask",
+    "make_pixel_grid",
+    "sample_patch_centers",
+    "apply_inverse_homography",
     "get_crop_matrix",
     "get_pad_matrix",
     "get_resize_matrix",

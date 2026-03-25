@@ -43,6 +43,7 @@ def transform_from_Rt(R, t):
     """
     R: (B, 3, 3) rotation matrices
     t: (B, 3) translation vectors
+
     Returns:
         T: (B, 4, 4) transformation matrices, where T = [[R, t], [0, 0, 0, 1]]
     """
@@ -56,10 +57,28 @@ def transform_from_Rt(R, t):
     return T
 
 
+def backproject_points(pts2d, depth, K):
+    """
+    find 3D points from 2D image points and depth
+
+    pts2d: (..., N, 2)  2D image points in pixels (x, y)
+    depth: (..., N)     depth values in mm
+    K:     (..., 3, 3)  camera intrinsic matrix
+    Returns:
+           (..., N, 3)  3D points in camera space in mm
+    """
+    ones = torch.ones_like(pts2d[..., :1], device=pts2d.device, dtype=pts2d.dtype)
+    pts2d_h = torch.cat([pts2d, ones], dim=-1)  # (..., N, 3)
+    pts3d = torch.linalg.solve(K, pts2d_h.transpose(-2, -1))  # (..., 3, N)
+    pts3d = pts3d.transpose(-2, -1)  # (..., N, 3)
+    return pts3d * depth.unsqueeze(-1)
+
+
 __all__ = [
     "euler_to_rotation_matrix",
     "rotation_matrix_to_euler",
     "transform_from_Rt",
+    "backproject_points",
 ]
 
 if __name__ == "__main__":

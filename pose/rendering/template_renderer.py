@@ -20,10 +20,9 @@ class TemplateRenderer:
 
         self.data_path = Path(data_dir) / dataset_name
         self.templates_path = Path(data_dir) / "templates" / dataset_name
-        self.models_path = Path(data_dir) / dataset_name / "models"
 
         # Load models_info
-        self.models_info = load_models_info(self.models_path)
+        self.models_info = load_models_info(self.data_path / "models")
         self.object_ids = sorted(self.models_info.keys())
 
         # Load camera intrinsics
@@ -42,7 +41,9 @@ class TemplateRenderer:
         vertices = np.array(sphere.vertices)
 
         for object_id in self.object_ids:
-            model = trimesh.load(self.models_path / f"obj_{object_id:06d}.ply", process=False)
+            model = trimesh.load(
+                self.data_path / "models" / f"obj_{object_id:06d}.ply", process=False
+            )
 
             radius = self.models_info[object_id]["diameter"] / 2
             cam_pos = vertices * radius * dist_mult
