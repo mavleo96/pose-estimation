@@ -8,9 +8,11 @@ conda create -n $ENV_NAME python=3.10 -y && \
 conda init bash && \
 eval "$(conda shell.bash hook)" && \
 conda activate $ENV_NAME && \
-pip install -U torch \
+pip install -U \
+ torch \
  torchvision \
- kornia \
+ --index-url https://download.pytorch.org/whl/cu128 && \
+pip install -U kornia \
  einops \
  huggingface-hub \
  transformers \
@@ -33,7 +35,8 @@ pip install -U torch \
  numpy \
  pandas \
  matplotlib \
- seaborn
+ seaborn \
+ git+https://github.com/mavleo96/bop_toolkit.git
 
 conda env config vars set PYOPENGL_PLATFORM=egl
 conda env export --no-builds | grep -v "^prefix: " > env2.yml

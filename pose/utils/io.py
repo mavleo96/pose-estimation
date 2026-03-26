@@ -1,4 +1,8 @@
 import json
+from pathlib import Path
+
+import numpy as np
+from bop_toolkit_lib.inout import save_bop_results
 
 from .camera import CameraIntrinsic
 
@@ -19,4 +23,54 @@ def load_camera_intrinsics(dataset_name, data_path):
     return camera
 
 
-__all__ = ["load_models_info", "load_camera_intrinsics"]
+def save_bop_results_from_predictions(predictions_dir: Path, save_path: Path) -> None:
+    """
+    Save BOP results from predictions saved in the following format:
+
+    The predictions should be available in the following format:
+    {
+        "scene_id": int,
+        "im_id": int,
+        "detection_time": float,
+        "results": {
+            "obj_id": list[int],
+            "detection_score": list[float],
+            "R": list[np.ndarray[float]],
+            "t": list[np.ndarray[float]],
+            "pose_estimation_time": list[float],
+        }
+
+    Args:
+        predictions_dir: Path to the directory containing the predictions.
+        save_path: Path to the file to save the results.
+
+    Returns:
+        None
+    """
+    records = []
+    for file in predictions_dir.glob("*.npz"):
+        with np.load(file, allow_pickle=True) as data:
+            info = {k: v.item() for k, v in data.items()}
+
+        scene_id = info["scene_id"]
+        im_id = info["im_id"]
+        results = info["results"]
+
+        time = info["detection_time"] + sum(results["pose_estimation_time"])
+
+        for i in range(len(results["obj_id"])):
+            records.append(
+                {
+                    "scene_id": scene_id,
+                    "im_id": im_id,
+                    "obj_id": results["obj_id"][i],
+                    "score": results["detection_score"][i],
+                    "R": results["R"][i],
+                    "t": results["t"][i],
+                    "time": time,
+                }
+            )
+    save_bop_results(save_path, records)
+
+
+__all__ = ["load_models_info", "load_camera_intrinsics", "save_bop_results_from_predictions"]
