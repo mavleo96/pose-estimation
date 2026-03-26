@@ -11,7 +11,7 @@ from ..data.template import TemplateViewDataset
 def precompute_embeddings(
     dataset_name,
     data_dir,
-    object_ids,
+    obj_ids,
     encoder,
     batch_size,
     embeddings_dir,
@@ -25,7 +25,7 @@ def precompute_embeddings(
     Args:
         dataset_name  : str         — BOP dataset name (e.g. "lmo", "ycbv")
         data_dir      : str | Path  — root data directory
-        object_ids    : list[int]   — object ids to precompute embeddings for
+        obj_ids       : list[int]   — object ids to precompute embeddings for
         encoder       : nn.Module   — embedding model with forward returning "patch_embeddings"
         batch_size    : int         — number of template views per forward pass
         embeddings_dir: str | Path  — output directory for embeddings and templates
@@ -50,8 +50,8 @@ def precompute_embeddings(
     depth_list = []
     mask_list = []
 
-    for object_id in object_ids:
-        template_dataset = TemplateViewDataset(templates_path, object_id, output_size, depth_scale)
+    for obj_id in obj_ids:
+        template_dataset = TemplateViewDataset(templates_path, obj_id, output_size, depth_scale)
         dataloader = DataLoader(
             template_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers
         )
@@ -62,7 +62,7 @@ def precompute_embeddings(
         object_depth_list = []
         object_mask_list = []
 
-        for batch in tqdm(dataloader, desc=f"precomputing embeddings for object {object_id:06d}"):
+        for batch in tqdm(dataloader, desc=f"precomputing embeddings for obj {obj_id:06d}"):
             rgb = batch["rgb"].to(encoder.device, dtype=encoder.dtype)
             with torch.no_grad():
                 patch_embeddings = encoder(rgb)["patch_embeddings"]
@@ -73,11 +73,11 @@ def precompute_embeddings(
             object_depth_list.append(batch["depth"].numpy())
             object_mask_list.append(batch["mask"].numpy())
 
-        object_embeddings = np.concat(object_embeddings_list, axis=0)
-        object_M = np.concat(object_M_list, axis=0)
-        object_rgb = np.concat(object_rgb_list, axis=0)
-        object_depth = np.concat(object_depth_list, axis=0)
-        object_mask = np.concat(object_mask_list, axis=0)
+        object_embeddings = np.concatenate(object_embeddings_list, axis=0)
+        object_M = np.concatenate(object_M_list, axis=0)
+        object_rgb = np.concatenate(object_rgb_list, axis=0)
+        object_depth = np.concatenate(object_depth_list, axis=0)
+        object_mask = np.concatenate(object_mask_list, axis=0)
 
         embeddings_list.append(object_embeddings)
         M_list.append(object_M)

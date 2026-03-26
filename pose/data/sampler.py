@@ -29,11 +29,11 @@ class ImageGroupedBatchSampler(Sampler):
 
 class QueryDataCollator:
     def __call__(self, batch):
-        # all items in batch share the same scene_id and image_id (ImageGroupedBatchSampler)
+        # all items in batch share the same scene_id and im_id (ImageGroupedBatchSampler)
         return {
             "scene_id": batch[0]["scene_id"],
-            "image_id": batch[0]["image_id"],
-            "object_id": [item["object_id"] for item in batch],
+            "im_id": batch[0]["im_id"],
+            "obj_id": [item["obj_id"] for item in batch],
             "instance_id": [item["instance_id"] for item in batch],
             "rgb": torch.stack([item["rgb"] for item in batch]),
             "depth": torch.stack([item["depth"] for item in batch]),
@@ -50,7 +50,7 @@ class SceneDataCollator:
         return {
             "image_key": [item["image_key"] for item in batch],
             "scene_id": [item["scene_id"] for item in batch],
-            "image_id": [item["image_id"] for item in batch],
+            "im_id": [item["im_id"] for item in batch],
             "rgb": torch.stack([item["rgb"] for item in batch]),
             "depth": torch.stack([item["depth"] for item in batch]),
             "cam_K": torch.stack([item["cam_K"] for item in batch]),

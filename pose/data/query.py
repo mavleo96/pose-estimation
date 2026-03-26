@@ -51,15 +51,15 @@ class QueryDataset(Dataset):
 
             # Iterate over all images
             for rgb_path in (scene_path / "rgb").iterdir():
-                image_id = int(rgb_path.stem)  # "000001" -> 1
-                image_key = f"{scene_id:06d}_{image_id:06d}"  # 2, 1 -> "000002_000001"
+                im_id = int(rgb_path.stem)  # "000001" -> 1
+                image_key = f"{scene_id:06d}_{im_id:06d}"  # 2, 1 -> "000002_000001"
 
-                camera_params = camera_info[str(image_id)]
+                camera_params = camera_info[str(im_id)]
 
                 image_info[image_key] = {
                     "image_key": image_key,
                     "scene_id": scene_id,
-                    "image_id": image_id,
+                    "im_id": im_id,
                     "cam_K": np.array(camera_params["cam_K"]).reshape(3, 3),
                     "depth_scale": camera_params["depth_scale"],
                     "rgb_path": rgb_path,
@@ -79,9 +79,13 @@ class QueryDataset(Dataset):
         instance_id = 1
 
         for d in detections:
-            if prev_key != f"{d['scene_id']}-{d['image_id']}-{d['category_id']}":
+            d["im_id"] = d["image_id"]
+            d["obj_id"] = d["category_id"]
+            del d["category_id"], d["image_id"]
+
+            if prev_key != f"{d['scene_id']}-{d['im_id']}-{d['obj_id']}":
                 instance_id = 1
-                prev_key = f"{d['scene_id']}-{d['image_id']}-{d['category_id']}"
+                prev_key = f"{d['scene_id']}-{d['im_id']}-{d['obj_id']}"
 
             d["instance_id"] = instance_id
             instance_id += 1
@@ -90,7 +94,7 @@ class QueryDataset(Dataset):
 
     def get_image_key(self, idx):
         record = self.detections[idx]
-        return f"{record['scene_id']:06d}_{record['image_id']:06d}"
+        return f"{record['scene_id']:06d}_{record['im_id']:06d}"
 
     def __len__(self):
         return len(self.detections)
@@ -111,8 +115,8 @@ class QueryDataset(Dataset):
 
         return {
             "scene_id": record["scene_id"],
-            "image_id": record["image_id"],
-            "object_id": record["category_id"],
+            "im_id": record["im_id"],
+            "obj_id": record["obj_id"],
             "instance_id": record["instance_id"],
             "detection_score": record["score"],
             "detection_time": record["time"],

@@ -23,7 +23,7 @@ class TemplateRenderer:
 
         # Load models_info
         self.models_info = load_models_info(self.data_path / "models")
-        self.object_ids = sorted(self.models_info.keys())
+        self.obj_ids = sorted(self.models_info.keys())
 
         # Load camera intrinsics
         self.camera = load_camera_intrinsics(self.dataset_name, self.data_path)
@@ -40,19 +40,17 @@ class TemplateRenderer:
         sphere = trimesh.creation.icosphere(subdivisions=self.SUBDIVISIONS)
         vertices = np.array(sphere.vertices)
 
-        for object_id in self.object_ids:
-            model = trimesh.load(
-                self.data_path / "models" / f"obj_{object_id:06d}.ply", process=False
-            )
+        for obj_id in self.obj_ids:
+            model = trimesh.load(self.data_path / "models" / f"obj_{obj_id:06d}.ply", process=False)
 
-            radius = self.models_info[object_id]["diameter"] / 2
+            radius = self.models_info[obj_id]["diameter"] / 2
             cam_pos = vertices * radius * dist_mult
 
             # compute w2c matrices for all 162 viewpoints
             T_m2c = look_at_matrix(cam_pos)
 
             # save rendered RGB + depth templates and poses
-            save_dir = self.templates_path / f"{object_id:06d}"
+            save_dir = self.templates_path / f"{obj_id:06d}"
             generate_and_save_templates(
                 model,
                 T_m2c,
@@ -62,6 +60,6 @@ class TemplateRenderer:
                 self.camera.depth_scale,
                 save_dir,
             )
-            np.save(self.templates_path / "object_poses" / f"{object_id:06d}.npy", T_m2c)
+            np.save(self.templates_path / "object_poses" / f"{obj_id:06d}.npy", T_m2c)
 
-            print(f"object {object_id:06d} done — {len(T_m2c)} templates to {save_dir}")
+            print(f"object {obj_id:06d} done — {len(T_m2c)} templates to {save_dir}")

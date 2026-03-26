@@ -38,12 +38,12 @@ class TemplateDataset:
 
         # Load models_info
         self.models_info = load_models_info(self.data_path / "models")
-        self.object_ids = sorted(self.models_info.keys())
+        self.obj_ids = sorted(self.models_info.keys())
 
         # Load object poses
         T_m2c_list = []
-        for object_id in self.object_ids:
-            T_m2c = np.load(self.templates_path / "object_poses" / f"{object_id:06d}.npy")
+        for obj_id in self.obj_ids:
+            T_m2c = np.load(self.templates_path / "object_poses" / f"{obj_id:06d}.npy")
             T_m2c_list.append(T_m2c)
         self.T_m2c = torch.from_numpy(np.stack(T_m2c_list, axis=0)).float()
 
@@ -59,14 +59,14 @@ class TemplateDataset:
             self.M = torch.from_numpy(f["M"]).float()
             self.mask = torch.from_numpy(f["mask"]).bool()
 
-    def get_index(self, object_id):
-        if isinstance(object_id, list):
-            return [self.object_ids.index(obj_id) for obj_id in object_id]
+    def get_index(self, obj_id):
+        if isinstance(obj_id, list):
+            return [self.obj_ids.index(obj_id) for obj_id in obj_id]
         else:
-            return self.object_ids.index(object_id)
+            return self.obj_ids.index(obj_id)
 
     def __len__(self):
-        return len(self.object_ids)
+        return len(self.obj_ids)
 
     def __getitem__(self, index):
         return {
@@ -82,9 +82,9 @@ class TemplateDataset:
 class TemplateViewDataset(Dataset):
     """Lightweight dataset for processing RGB images for embedding computation."""
 
-    def __init__(self, templates_path, object_id, output_size, depth_scale, rgb_transform=None):
+    def __init__(self, templates_path, obj_id, output_size, depth_scale, rgb_transform=None):
         super().__init__()
-        self.object_dir = Path(templates_path) / f"{object_id:06d}"
+        self.object_dir = Path(templates_path) / f"{obj_id:06d}"
         self.output_size = output_size
         self.depth_scale = depth_scale
 

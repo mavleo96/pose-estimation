@@ -38,15 +38,15 @@ class SceneDataset(Dataset):
 
             # Iterate over all images
             for rgb_path in (scene_path / "rgb").iterdir():
-                image_id = int(rgb_path.stem)  # "000001" -> 1
-                image_key = f"{scene_id:06d}_{image_id:06d}"  # 2, 1 -> "000002_000001"
+                im_id = int(rgb_path.stem)  # "000001" -> 1
+                image_key = f"{scene_id:06d}_{im_id:06d}"  # 2, 1 -> "000002_000001"
 
-                camera_params = camera_info[str(image_id)]
+                camera_params = camera_info[str(im_id)]
 
                 image_info[image_key] = {
                     "image_key": image_key,
                     "scene_id": scene_id,
-                    "image_id": image_id,
+                    "im_id": im_id,
                     "cam_K": np.array(camera_params["cam_K"]).reshape(3, 3),
                     "depth_scale": camera_params["depth_scale"],
                     "rgb_path": rgb_path,
@@ -69,7 +69,7 @@ class SceneDataset(Dataset):
         return {
             "image_key": record["image_key"],
             "scene_id": record["scene_id"],
-            "image_id": record["image_id"],
+            "im_id": record["im_id"],
             "rgb": self.rgb_transform(rgb),
             "depth": torch.from_numpy(depth),  # Note: depth is not yet normalized
             "cam_K": torch.from_numpy(record["cam_K"]).float(),
