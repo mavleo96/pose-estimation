@@ -61,7 +61,7 @@ class TemplateDataset:
 
     def get_index(self, obj_id):
         if isinstance(obj_id, list):
-            return [self.obj_ids.index(obj_id) for obj_id in obj_id]
+            return [self.obj_ids.index(i) for i in obj_id]
         else:
             return self.obj_ids.index(obj_id)
 

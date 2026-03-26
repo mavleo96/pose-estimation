@@ -32,3 +32,15 @@ python testing.py test_dataset_name=lmo run_id=lmo_soft_dinov3 +corres=soft +emb
 python scripts/download_bop_datasets.py --dataset_name=lmo
 ```
 
+## Run PnP pipeline
+```bash
+python -m pose.inference \
+    --run_name lmo_dinov2_pnp_518 \
+    --dataset_name lmo \
+    --detections_path /data/pose-estimation/bop_extra/default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_lmo-test_3cb298ea-e2eb-4713-ae9e-5a7134c5da0f.json \
+    --device cuda \
+    --dtype float16 \
+    --output_size 518 518 \
+    --batch_size 4 \
+    --embedding_model dinov2
+```

@@ -90,13 +90,6 @@ def pnp_pipeline(
     logger.info(matcher)
     logger.info(pose_estimator)
 
-    # Initialize feature size and grid based on output size
-    feat_size = (output_size[0] // model.patch_size, output_size[1] // model.patch_size)
-    grid2d = (
-        make_pixel_grid(*feat_size, device=device).reshape(-1, 2) * model.patch_size
-        + model.patch_size // 2
-    )
-
     # Load template and query datasets
     logger.info("Loading template and query datasets...")
     template_dataset = TemplateDataset(dataset_name, data_root, results_dir / "embeddings")
@@ -106,11 +99,19 @@ def pnp_pipeline(
     collator = QueryDataCollator()
     dataloader = DataLoader(query_dataset, batch_sampler=sampler, collate_fn=collator)
 
+    # Initialize feature size and grid based on output size
+    feat_size = (output_size[0] // model.patch_size, output_size[1] // model.patch_size)
+    grid2d = (
+        make_pixel_grid(*feat_size, device=device).reshape(-1, 2) * model.patch_size
+        + model.patch_size // 2
+    )
+    cam_K = template_dataset.cam_K.to(device)
+    cam_K_cpu = cam_K.cpu()
+
     # Run inference loop
     logger.info("Running inference loop...")
     results_dict = {}
     inference_start = time.time()
-    count = 0
     for batch in tqdm(dataloader, desc="Estimating poses...", total=len(dataloader)):
         time_start = time.time()
         B = len(batch["obj_id"])
@@ -130,7 +131,6 @@ def pnp_pipeline(
             .to(device)
         )
         template_M = templates["M"].to(device)
-        cam_K = template_dataset.cam_K.to(device)
 
         # Get query data
         query_rgb = batch["rgb"].to(model.device, dtype=model.dtype)
@@ -176,7 +176,6 @@ def pnp_pipeline(
         # Move tensors to CPU for pose estimation
         tar_pts2d = tar_pts2d.to("cpu")
         src_pts3d = src_pts3d.to("cpu")
-        cam_K = cam_K.to("cpu")
         topk_corr_mask = topk_corr_mask.to("cpu")
         batch_idx = batch_idx.to("cpu")
 
@@ -186,7 +185,7 @@ def pnp_pipeline(
         cand_scores = []
         for i in range(k_hypotheses):
             cand_R_est, cand_t_est, cand_score = pose_estimator.estimate_pose(
-                src_pts3d[:, i], tar_pts2d, cam_K.expand(B, -1, -1), topk_corr_mask[:, i]
+                src_pts3d[:, i], tar_pts2d, cam_K_cpu.expand(B, -1, -1), topk_corr_mask[:, i]
             )
             R_est_list.append(cand_R_est)
             t_est_list.append(cand_t_est)
@@ -208,7 +207,7 @@ def pnp_pipeline(
             results_dict[image_key] = {
                 "scene_id": batch["scene_id"],
                 "im_id": batch["im_id"],
-                "detection_time": batch["detection_time"][0],
+                "detection_time": np.mean(batch["detection_time"]),
                 "results": {
                     "obj_id": [],
                     "detection_score": [],
@@ -222,10 +221,6 @@ def pnp_pipeline(
         results_dict[image_key]["results"]["t"].extend([best_t_est[i] for i in range(B)])
         results_dict[image_key]["results"]["detection_score"].extend(batch["detection_score"])
         results_dict[image_key]["results"]["pose_estimation_time"].extend([time_taken / B] * B)
-
-        count += 1
-        if count > 50:
-            break
 
     inference_time = time.time() - inference_start
     logger.info(
