@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -5,6 +6,9 @@ import trimesh
 
 from ..utils.io import load_camera_intrinsics, load_models_info
 from .render import generate_and_save_templates, look_at_matrix
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class TemplateRenderer:
@@ -62,4 +66,4 @@ class TemplateRenderer:
             )
             np.save(self.templates_path / "object_poses" / f"{obj_id:06d}.npy", T_m2c)
 
-            print(f"object {obj_id:06d} done — {len(T_m2c)} templates to {save_dir}")
+            logger.info(f"object {obj_id:06d} done — {len(T_m2c)} templates to {save_dir}")

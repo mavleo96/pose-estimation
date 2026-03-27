@@ -32,20 +32,16 @@ class PnPPoseEstimator:
         confidence=0.99,
         max_iters=1000,
         refine=True,
-        solver=cv2.SOLVEPNP_ITERATIVE,
     ):
         self.inlier_thresh = inlier_thresh
         self.confidence = confidence
         self.max_iters = max_iters
         self.refine = refine
-        self.min_points = 4  # cv2 PnP hard minimum
-        self.solver = solver
 
     def __repr__(self):
         return (
             f"PnPPoseEstimator(inlier_thresh={self.inlier_thresh}, confidence={self.confidence},"
-            f" max_iters={self.max_iters}, refine={self.refine}, min_point={self.min_points},"
-            f" solver={self.solver})"
+            f" max_iters={self.max_iters}, refine={self.refine})"
         )
 
     def estimate_pose(self, pts3d, pts2d, K, mask=None):
@@ -98,7 +94,7 @@ class PnPPoseEstimator:
             mask = torch.ones(B, N, dtype=torch.bool, device=device)
 
         valid_count = mask.sum(dim=1)  # (B,)  int tensor
-        valid_enough = valid_count >= self.min_points  # (B,)  bool tensor
+        valid_enough = valid_count >= 4  # (B,)  bool tensor
 
         # Initialize best pose and inliers
         best_R = torch.eye(3, dtype=dtype).unsqueeze(0).expand(B, -1, -1).clone()
@@ -124,6 +120,7 @@ class PnPPoseEstimator:
             K_b = K_np[b]  # (3, 3)
             valid_ct = int(valid.sum())  # Python int for clean division
 
+            # Note: cv2.SOLVEPNP_SQPNP used since it works better when initial guess is not provided
             success, rvec, tvec, inliers = cv2.solvePnPRansac(
                 objectPoints=p3,
                 imagePoints=p2,
@@ -132,7 +129,7 @@ class PnPPoseEstimator:
                 iterationsCount=self.max_iters,
                 reprojectionError=self.inlier_thresh,
                 confidence=self.confidence,
-                flags=self.solver,
+                flags=cv2.SOLVEPNP_SQPNP,
             )
 
             if not success or rvec is None:
@@ -154,7 +151,7 @@ class PnPPoseEstimator:
             # Wrapped in try/except because solvePnPRefineLM can raise on
             # degenerate inlier configurations (e.g. all-coplanar points).
             # On failure the RANSAC rvec/tvec are kept unchanged.
-            if self.refine and n_inliers >= self.min_points:
+            if self.refine and n_inliers >= 4:
                 try:
                     rvec, tvec = cv2.solvePnPRefineLM(
                         objectPoints=p3[inlier_idx],
@@ -169,8 +166,19 @@ class PnPPoseEstimator:
 
             R_np, _ = cv2.Rodrigues(rvec)  # (3, 3)
 
-            best_R[b] = torch.from_numpy(R_np).to(dtype)
-            best_t[b] = torch.from_numpy(tvec.flatten()).to(dtype)
+            t_candidate = torch.from_numpy(tvec.flatten()).to(dtype)
+            R_candidate = torch.from_numpy(R_np).to(dtype)
+
+            # Guard against float64→float32 overflow and numerically diverged
+            # solutions. solvePnPRansac/RefineLM can return success=True with
+            # exploded tvec when correspondences are near-degenerate; the
+            # overflow only becomes inf after the float32 cast.
+            if t_candidate.isinf().any() or t_candidate.isnan().any() or R_candidate.isnan().any():
+                score[b] = 0.0
+                continue
+
+            best_R[b] = R_candidate
+            best_t[b] = t_candidate
 
         return best_R.to(device), best_t.to(device), score.to(device)
 

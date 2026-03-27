@@ -11,6 +11,7 @@ from ..utils.io import save_bop_results_from_predictions
 from .pnp_pipeline import pnp_pipeline
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def main() -> None:
@@ -25,7 +26,7 @@ def main() -> None:
     parser.add_argument("--embedding_model", type=str, default="dinov2")
     parser.add_argument("--embedding_batch_size", type=int, default=20)
     parser.add_argument("--sim_threshold", type=float, default=0.5)
-    parser.add_argument("--patch_threshold", type=float, default=3.0)
+    parser.add_argument("--patch_threshold", type=float, default=0.0)
     parser.add_argument("--k_hypotheses", type=int, default=5)
     args = parser.parse_args()
 

@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -6,6 +7,9 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from ..data.template import TemplateViewDataset
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def precompute_embeddings(

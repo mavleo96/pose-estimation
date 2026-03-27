@@ -1,3 +1,4 @@
+import json
 import logging
 import shutil
 import time
@@ -20,6 +21,7 @@ from ..utils.image import apply_inverse_homography, make_pixel_grid, sample_patc
 from .utils import precompute_embeddings, precompute_pca
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def pnp_pipeline(
@@ -33,7 +35,7 @@ def pnp_pipeline(
     embedding_model: str = "dinov2",
     embedding_batch_size: int = 20,
     sim_threshold: float = 0.5,
-    patch_threshold: float = 3.0,
+    patch_threshold: float = 0.0,
     k_hypotheses: int = 5,
 ) -> None:
     data_root = Path(DATA_DIR)
@@ -80,9 +82,20 @@ def pnp_pipeline(
         f" {onboarding_time / len(renderer.obj_ids):.2f} seconds per object"
     )
 
+    with open(results_dir / "onboarding.json", "w") as f:
+        json.dump(
+            {
+                "onboarding_time": onboarding_time,
+                "onboarding_time_per_object": onboarding_time / len(renderer.obj_ids),
+            },
+            f,
+            indent=4,
+        )
+
     # ----------------------------- INFERENCE -----------------------------
     # Initialize matcher and pose estimator
     logger.info("Initializing matcher and pose estimator...")
+    # Note: patch_threshold is set to 0.0 to get Mutual NN but seems aggressive
     matcher = PatchCorrespondenceFinder(
         sim_threshold=sim_threshold, patch_threshold=patch_threshold
     )
