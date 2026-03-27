@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 import numpy as np
 from bop_toolkit_lib.inout import save_bop_results
@@ -17,13 +16,13 @@ def load_models_info(models_path):
 def load_camera_intrinsics(dataset_name, data_path):
     if dataset_name == "ycbv":
         # Note: YCBV dataset has two cameras: "uw" and "cmu"
-        camera = CameraIntrinsic.from_json(data_path / dataset_name / "camera_uw.json")
+        camera = CameraIntrinsic.from_json(data_path / "camera_uw.json")
     else:
-        camera = CameraIntrinsic.from_json(data_path / dataset_name / "camera.json")
+        camera = CameraIntrinsic.from_json(data_path / "camera.json")
     return camera
 
 
-def save_bop_results_from_predictions(predictions_dir: Path, save_path: Path) -> None:
+def save_bop_results_from_predictions(method_name, dataset_name, split, save_dir, predictions_dir):
     """
     Save BOP results from predictions saved in the following format:
 
@@ -41,11 +40,11 @@ def save_bop_results_from_predictions(predictions_dir: Path, save_path: Path) ->
         }
 
     Args:
+        method_name: Name of the method.
+        dataset_name: Name of the dataset.
+        split: Name of the split.
+        save_dir: Path to the directory to save the results.
         predictions_dir: Path to the directory containing the predictions.
-        save_path: Path to the file to save the results.
-
-    Returns:
-        None
     """
     records = []
     for file in predictions_dir.glob("*.npz"):
@@ -70,6 +69,7 @@ def save_bop_results_from_predictions(predictions_dir: Path, save_path: Path) ->
                     "time": time,
                 }
             )
+    save_path = save_dir / f"{method_name}_{dataset_name}-{split}.csv"
     save_bop_results(save_path, records)
 
 

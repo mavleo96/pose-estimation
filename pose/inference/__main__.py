@@ -18,6 +18,7 @@ def main() -> None:
     parser = argparse.ArgumentParser("PnP pipeline")
     parser.add_argument("--run_name", type=str, required=True)
     parser.add_argument("--dataset_name", type=str, required=True)
+    parser.add_argument("--split", type=str, default="test")
     parser.add_argument("--detections_path", type=str, required=True)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--dtype", type=str, default="float16")
@@ -61,7 +62,13 @@ def main() -> None:
     )
 
     # Save predictions in BOP format
-    save_bop_results_from_predictions(results_dir / "predictions", results_dir / "predictions.csv")
+    save_bop_results_from_predictions(
+        method_name=args.run_name,
+        dataset_name=args.dataset_name,
+        split=args.split,
+        save_dir=results_dir,
+        predictions_dir=results_dir / "predictions",
+    )
 
 
 if __name__ == "__main__":

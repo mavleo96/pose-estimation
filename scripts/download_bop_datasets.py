@@ -1,54 +1,62 @@
-import sys
-import os
 import argparse
-from pathlib import Path
+import logging
+import os
+import shutil
+import sys
 import zipfile
+from pathlib import Path
 
 sys.path.insert(0, os.getcwd())
 
-from _configs.constants import DATA_DIR
-from _configs.constants import BOP_CLASSIC, BOP_H3, BOP_INDUSTRIAL
+from huggingface_hub import snapshot_download
+
+from _configs.constants import BOP_CLASSIC, BOP_H3, BOP_INDUSTRIAL, DATA_DIR
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def download_dataset(dataset_name: str) -> None:
     local_dir = Path(DATA_DIR) / dataset_name
-    # if local_dir.exists():
-    #     print(f"Dataset {dataset_name} already exists in {local_dir}")
-    #     return
-
-    print(f"Downloading dataset {dataset_name} to {local_dir}")
     local_dir.mkdir(parents=True, exist_ok=True)
 
     # download the dataset
-    download_cmd = (
-        f"hf download bop-benchmark/{dataset_name} "
-        "--repo-type=dataset "
-        f"--local-dir {local_dir} "
-        "--exclude '*train*' '*test*all*'"
+    logger.info(f"Downloading dataset {dataset_name} to {local_dir}")
+    snapshot_download(
+        repo_id=f"bop-benchmark/{dataset_name}",
+        repo_type="dataset",
+        local_dir=str(local_dir),
+        ignore_patterns=["*train*", "*test*all*"],
     )
-    os.system(download_cmd)
 
     for zip_path in local_dir.rglob("*.zip"):
-        print(f"Extracting {zip_path}")
+        logger.info(f"Extracting {zip_path}")
         with zipfile.ZipFile(zip_path, "r") as z:
             z.extractall(zip_path.parent)
         zip_path.unlink()  # remove zip after extraction
 
+    # move everything in. /local_dir/dataset_name to /local_dir
+    for dir in local_dir.iterdir():
+        if dir.is_dir() and dir.name == dataset_name:
+            for file in dir.iterdir():
+                shutil.move(file, local_dir / file.name)
+            dir.rmdir()
+
 
 def download_bop_extra() -> None:
     local_dir = Path(DATA_DIR) / "bop_extra"
-    print(f"Downloading bop_extra to {local_dir}")
     local_dir.mkdir(parents=True, exist_ok=True)
 
-    download_cmd = (
-        f"hf download bop-benchmark/bop_extra "
-        "--repo-type=dataset "
-        f"--local-dir {local_dir} "
-        "--exclude '*coco*' 'research/*'"
+    logger.info(f"Downloading bop_extra to {local_dir}")
+    snapshot_download(
+        repo_id="bop-benchmark/bop_extra",
+        repo_type="dataset",
+        local_dir=str(local_dir),
+        ignore_patterns=["*coco*", "research/*"],
     )
-    os.system(download_cmd)
+
     for zip_path in local_dir.rglob("*.zip"):
-        print(f"Extracting {zip_path}")
+        logger.info(f"Extracting {zip_path}")
         with zipfile.ZipFile(zip_path, "r") as z:
             z.extractall(zip_path.parent)
         zip_path.unlink()  # remove zip after extraction

@@ -1,8 +1,9 @@
 import argparse
+import csv
 import json
 import math
-import csv
 from pathlib import Path
+
 import numpy as np
 
 
@@ -17,7 +18,7 @@ def load_gt(dataset_path):
     for scene_info_path in scene_info_paths:
         scene_id = int(scene_info_path.parent.name)
 
-        with open(scene_info_path, "r") as f:
+        with open(scene_info_path) as f:
             scene_gt = json.load(f)
 
         gt_poses[scene_id] = {
@@ -40,7 +41,7 @@ def load_predictions(predictions_path):
     Returns a mapping: scene_id -> {im_id -> {obj_id -> {R, t}}}
     """
     pred_poses = {}
-    with open(predictions_path, "r") as f:
+    with open(predictions_path) as f:
         reader = csv.DictReader(f)
 
         for row in reader:
@@ -111,7 +112,7 @@ def summarize_stats(errors):
     global_error_summary = {"R_err": [], "t_err": []}
 
     for scene_id, scene_errors in errors.items():
-        for im_id, im_errors in scene_errors.items():
+        for _im_id, im_errors in scene_errors.items():
             for obj_id, obj_errors in im_errors.items():
                 if obj_id not in obj_error_summary:
                     obj_error_summary[obj_id] = {"R_err": [], "t_err": []}
@@ -164,9 +165,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Compute rotation and translation errors per prediction"
     )
-    parser.add_argument(
-        "--data_root", type=str, required=True, help="Path to data root"
-    )
+    parser.add_argument("--data_root", type=str, required=True, help="Path to data root")
     parser.add_argument("--dataset_name", type=str, required=True, help="Dataset name")
     parser.add_argument(
         "--pred_csv",
@@ -183,15 +182,11 @@ def main() -> None:
     print(f"Loaded {gt_count} ground-truth poses.")
 
     pred_poses = load_predictions(args.pred_csv)
-    pred_count = sum(
-        [len(im) for scene in pred_poses.values() for im in scene.values()]
-    )
+    pred_count = sum([len(im) for scene in pred_poses.values() for im in scene.values()])
     print(f"Loaded {pred_count} predictions.\n")
 
     errors = compute_errors(gt_poses, pred_poses)
-    obj_error_summary, scene_error_summary, global_error_summary = summarize_stats(
-        errors
-    )
+    obj_error_summary, scene_error_summary, global_error_summary = summarize_stats(errors)
 
     print("ERROR SUMMARY BY OBJECT")
     print(f"{'Object':<10} {'R_err (deg)':<20} {'t_err (mm)':<20} {'count':<10}")
