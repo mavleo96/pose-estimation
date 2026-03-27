@@ -121,16 +121,19 @@ class PnPPoseEstimator:
             valid_ct = int(valid.sum())  # Python int for clean division
 
             # Note: cv2.SOLVEPNP_SQPNP used since it works better when initial guess is not provided
-            success, rvec, tvec, inliers = cv2.solvePnPRansac(
-                objectPoints=p3,
-                imagePoints=p2,
-                cameraMatrix=K_b,
-                distCoeffs=None,
-                iterationsCount=self.max_iters,
-                reprojectionError=self.inlier_thresh,
-                confidence=self.confidence,
-                flags=cv2.SOLVEPNP_SQPNP,
-            )
+            try:
+                success, rvec, tvec, inliers = cv2.solvePnPRansac(
+                    objectPoints=p3,
+                    imagePoints=p2,
+                    cameraMatrix=K_b,
+                    distCoeffs=None,
+                    iterationsCount=self.max_iters,
+                    reprojectionError=self.inlier_thresh,
+                    confidence=self.confidence,
+                    flags=cv2.SOLVEPNP_SQPNP,
+                )
+            except cv2.error:
+                continue
 
             if not success or rvec is None:
                 # cv2 failed entirely — leave fallback values in place.
