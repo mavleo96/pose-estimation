@@ -74,11 +74,27 @@ def backproject_points(pts2d, depth, K):
     return pts3d * depth.unsqueeze(-1)
 
 
+def apply_inverse_transform(pts3d, T):
+    """
+    find pts s.t. T * pts = pts3d
+
+    pts3d: (..., N, 3)
+    T:     (..., 4, 4)
+    Returns:
+           (..., N, 3)
+    """
+    ones = torch.ones_like(pts3d[..., :1])
+    pts3d_h = torch.cat([pts3d, ones], dim=-1)  # (..., N, 4)
+    result = torch.linalg.solve(T, pts3d_h.transpose(-2, -1))  # (..., 4, N)
+    return result.transpose(-2, -1)[..., :3]  # (..., N, 3)
+
+
 __all__ = [
     "euler_to_rotation_matrix",
     "rotation_matrix_to_euler",
     "transform_from_Rt",
     "backproject_points",
+    "apply_inverse_transform",
 ]
 
 if __name__ == "__main__":

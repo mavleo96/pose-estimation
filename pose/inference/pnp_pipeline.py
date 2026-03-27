@@ -16,7 +16,7 @@ from ..matching import PatchCorrespondenceFinder
 from ..model import MODEL_MAP, PCA
 from ..pose_recovery import PnPPoseEstimator
 from ..rendering import TemplateRenderer
-from ..utils.geometry import backproject_points
+from ..utils.geometry import apply_inverse_transform, backproject_points
 from ..utils.image import apply_inverse_homography, make_pixel_grid, sample_patch_centers
 from .utils import precompute_embeddings, precompute_pca
 
@@ -143,6 +143,7 @@ def pnp_pipeline(
             .flatten(start_dim=-2)
             .to(device)
         )
+        template_T_m2c = templates["T_m2c"].to(device)
         template_M = templates["M"].to(device)
 
         # Get query data
@@ -172,17 +173,19 @@ def pnp_pipeline(
         topk_tar2src = output["idx_tar2src"][batch_idx, topk_template_indices]
         topk_corr_mask = output["mask"][batch_idx, topk_template_indices]
         topk_template_depth = template_depth[batch_idx, topk_template_indices]
+        topk_template_T_m2c = template_T_m2c[batch_idx, topk_template_indices]
         topk_template_M = template_M[batch_idx, topk_template_indices]
 
         # Compute 2D query points and 3D template points
         tar_pts2d = apply_inverse_homography(grid2d.expand(B, -1, -1).float(), query_M)
         K_adjusted = topk_template_M @ cam_K[None, None, ...]
-        template_pts3d = backproject_points(
+        template_pts3d_cam = backproject_points(
             grid2d.expand(B, k_hypotheses, -1, -1).float(),
             topk_template_depth,
             K_adjusted,
         )
-        src_pts3d = template_pts3d.gather(
+        template_pts3d_m = apply_inverse_transform(template_pts3d_cam, topk_template_T_m2c)
+        src_pts3d = template_pts3d_m.gather(
             dim=2, index=topk_tar2src.unsqueeze(-1).expand(-1, -1, -1, 3)
         )
 
