@@ -37,6 +37,7 @@ def pnp_pipeline(
     sim_threshold: float = 0.5,
     patch_threshold: float = 0.0,
     k_hypotheses: int = 5,
+    render_templates: bool = True,
 ) -> None:
     data_root = Path(DATA_DIR)
     embeddings_dir = results_dir / "embeddings"
@@ -48,9 +49,12 @@ def pnp_pipeline(
     onboarding_start = time.time()
 
     # Render templates
-    logger.info("Rendering templates...")
     renderer = TemplateRenderer(dataset_name, data_root)
-    renderer.render_templates()
+    if render_templates:
+        logger.info("Rendering templates...")
+        renderer.render_templates()
+    else:
+        logger.info("Using existing templates...")
 
     # Load embedding model and PCA
     logger.info("Loading embedding model and PCA...")
@@ -73,7 +77,7 @@ def pnp_pipeline(
         output_size=output_size,
         depth_scale=renderer.camera.depth_scale,
     )
-    precompute_pca(embeddings_dir=embeddings_dir, pca=pca)
+    precompute_pca(embeddings_dir=embeddings_dir, pca=pca, patch_size=model.patch_size)
     # pca.load_state_dict(torch.load(embeddings_dir / "pca.pt"))
 
     onboarding_time = time.time() - onboarding_start

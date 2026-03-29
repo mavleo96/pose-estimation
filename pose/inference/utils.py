@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from ..data.template import TemplateViewDataset
+from ..utils.image import sample_patch_centers
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -99,7 +100,7 @@ def precompute_embeddings(
     np.savez(embeddings_dir / "templates.npz", M=M, rgb=rgb, depth=depth, mask=mask)
 
 
-def precompute_pca(embeddings_dir, pca):
+def precompute_pca(embeddings_dir, pca, patch_size):
     """
     Fit PCA on precomputed embeddings and save projected embeddings to disk.
 
@@ -108,6 +109,7 @@ def precompute_pca(embeddings_dir, pca):
     Args:
         embeddings_dir: str | Path  — directory containing embeddings.npy
         pca           : PCA         — unfitted PCA module (nn.Module with fit/forward)
+        patch_size    : int         — patch size used to downsample the masks
 
     Saves:
         embeddings_dir/pca_embeddings.npy — (N_objects, N_views, N_patches, D_pca) float32
@@ -116,8 +118,11 @@ def precompute_pca(embeddings_dir, pca):
     embeddings_dir = Path(embeddings_dir)
 
     embeddings = torch.from_numpy(np.load(embeddings_dir / "embeddings.npy")).float()
+    with np.load(embeddings_dir / "templates.npz") as templates:
+        mask = torch.from_numpy(templates["mask"])
+        mask = sample_patch_centers(mask, patch_size).flatten(-2)
 
-    pca.fit(embeddings)
+    pca.fit(embeddings[mask])
 
     pca_embeddings_list = []
     for i in range(embeddings.shape[0]):

@@ -29,6 +29,7 @@ def main() -> None:
     parser.add_argument("--sim_threshold", type=float, default=0.5)
     parser.add_argument("--patch_threshold", type=float, default=0.0)
     parser.add_argument("--k_hypotheses", type=int, default=5)
+    parser.add_argument("--render_templates", action="store_true")
     args = parser.parse_args()
 
     # Paths
@@ -59,6 +60,7 @@ def main() -> None:
         sim_threshold=args.sim_threshold,
         patch_threshold=args.patch_threshold,
         k_hypotheses=args.k_hypotheses,
+        render_templates=args.render_templates,
     )
 
     # Save predictions in BOP format
