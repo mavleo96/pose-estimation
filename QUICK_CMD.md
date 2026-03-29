@@ -32,10 +32,11 @@ python -m pose.inference \
     --dataset_name lmo \
     --detections_path /data/pose-estimation/bop_extra/default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_lmo-test_3cb298ea-e2eb-4713-ae9e-5a7134c5da0f.json \
     --device cuda \
-    --dtype float16 \
+    --dtype bfloat16 \
     --output_size 224 224 \
     --batch_size 4 \
-    --embedding_model dinov2
+    --embedding_model dinov2 \
+    --render_templates
 ```
 
 ## BOP Evaluation
