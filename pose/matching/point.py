@@ -37,6 +37,14 @@ class PointCorrespondenceFinder(nn.Module):
                 idx_tar2src   : (B, T)    — forward NN: query point -> source point
                 score_tar2src : (B, T)    — cosine similarity of that match
         """
+        B, T, _ = tar_feat.shape
+        _, S, _ = src_feat.shape
+
+        assert tar_feat.shape[0] == src_feat.shape[0]
+        assert tar_mask is None or tar_mask.shape == (B, T)
+        assert src_mask is None or src_mask.shape == (B, S)
+        assert T < S
+
         # Compute cosine similarity
         tar_norm = F.normalize(tar_feat, dim=-1)  # (B, T, D)
         src_norm = F.normalize(src_feat, dim=-1)  # (B, S, D)
@@ -53,7 +61,10 @@ class PointCorrespondenceFinder(nn.Module):
 
         # Validity masks
         mask = score_tar2src >= self.sim_threshold
-        mask = mask * tar_mask
+        if tar_mask is not None:
+            mask = mask * tar_mask
+        score_tar2src = score_tar2src * mask.float()
+        idx_tar2src = idx_tar2src * mask.long()
 
         return {
             "idx_tar2src": idx_tar2src,

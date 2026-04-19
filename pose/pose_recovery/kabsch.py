@@ -80,7 +80,11 @@ class KabschPoseEstimator:
             return best_R, best_t, torch.zeros(B, device=device)
 
         # RANSAC loop
-        sample_probs = mask.float()
+        # Note: we use uniform probabilities for invalid rows to avoid multinomial crash
+        # on all-zero rows
+        sample_probs = torch.where(
+            valid_enough[:, None], mask.float(), torch.ones_like(mask.float())
+        )
         for _ in range(self.max_iters):
             sample_idx = torch.multinomial(sample_probs, self.sample_size, replacement=False)
             sample_idx = sample_idx.unsqueeze(-1).expand(-1, -1, 3)

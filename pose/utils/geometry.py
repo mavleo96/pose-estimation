@@ -131,8 +131,8 @@ def get_visible_point_projections(points, model, K, T_m2c):
     # get pixel coordinates for valid points
     # point in camera coordinates @ adjusted camera matrix
     pixel_coords_homo = p_cam[visible_ray] @ K.T
-    pixel_coords = (pixel_coords_homo[:, :2] / pixel_coords_homo[:, [2]]).astype(np.int32)
-    point_mapping = np.argwhere(visible_ray).reshape(-1).astype(np.int32)
+    pixel_coords = (pixel_coords_homo[:, :2] / pixel_coords_homo[:, [2]]).astype(np.int64)
+    point_mapping = np.argwhere(visible_ray).reshape(-1)
 
     return point_mapping, pixel_coords
 
