@@ -1,3 +1,4 @@
+import argparse
 import json
 import logging
 import shutil
@@ -18,6 +19,7 @@ from ..pose_recovery import PnPPoseEstimator
 from ..rendering import TemplateRenderer
 from ..utils.geometry import apply_inverse_transform, backproject_points
 from ..utils.image import apply_inverse_homography, make_pixel_grid, sample_patch_centers
+from ..utils.io import save_bop_results_from_predictions
 from .utils import precompute_embeddings, precompute_pca
 
 logger = logging.getLogger(__name__)
@@ -30,7 +32,7 @@ def pnp_pipeline(
     results_dir: Path,
     device: torch.device,
     dtype: torch.dtype = torch.float16,
-    output_size: tuple[int, int] = (518, 518),
+    output_size: tuple[int, int] = (224, 224),
     batch_size: int = 4,
     embedding_model: str = "dinov2",
     embedding_batch_size: int = 20,
@@ -100,6 +102,7 @@ def pnp_pipeline(
     # Initialize matcher and pose estimator
     logger.info("Initializing matcher and pose estimator...")
     # Note: patch_threshold is set to 0.0 to get Mutual NN but seems aggressive
+    assert patch_threshold == 0.0
     matcher = PatchCorrespondenceFinder(
         sim_threshold=sim_threshold, patch_threshold=patch_threshold
     )
@@ -109,7 +112,7 @@ def pnp_pipeline(
 
     # Load template and query datasets
     logger.info("Loading template and query datasets...")
-    template_dataset = TemplateDataset(dataset_name, data_root, results_dir / "embeddings")
+    template_dataset = TemplateDataset(dataset_name, data_root, embeddings_dir)
     query_dataset = QueryDataset(dataset_name, data_root, detections_path, output_size)
 
     sampler = ImageGroupedBatchSampler(query_dataset, batch_size=batch_size)
@@ -151,7 +154,7 @@ def pnp_pipeline(
         template_M = templates["M"].to(device)
 
         # Get query data
-        query_rgb = batch["rgb"].to(model.device, dtype=model.dtype)
+        query_rgb = batch["rgb"].to(device, dtype)
         query_mask = (
             sample_patch_centers(batch["mask"], model.patch_size).flatten(start_dim=-2).to(device)
         )
@@ -257,3 +260,66 @@ def pnp_pipeline(
     logger.info("Saving predictions...")
     for image_key, result in results_dict.items():
         np.savez(pred_dir / f"{image_key}.npz", **result)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser("PnP pipeline")
+    parser.add_argument("--run_name", type=str, required=True)
+    parser.add_argument("--dataset_name", type=str, required=True)
+    parser.add_argument("--split", type=str, default="test")
+    parser.add_argument("--detections_path", type=str, required=True)
+    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument("--dtype", type=str, default="float16")
+    parser.add_argument("--output_size", type=int, nargs=2, default=[224, 224])
+    parser.add_argument("--batch_size", type=int, default=4)
+    parser.add_argument("--embedding_model", type=str, default="dinov2")
+    parser.add_argument("--embedding_batch_size", type=int, default=20)
+    parser.add_argument("--sim_threshold", type=float, default=0.5)
+    parser.add_argument("--patch_threshold", type=float, default=0.0)
+    parser.add_argument("--k_hypotheses", type=int, default=5)
+    parser.add_argument("--render_templates", action="store_true")
+    args = parser.parse_args()
+
+    # Paths
+    detections_path = Path(args.detections_path)
+    results_dir = Path(DATA_DIR) / "results" / args.run_name
+    results_dir.mkdir(parents=True, exist_ok=True)
+
+    # Args
+    output_size = tuple(args.output_size)
+    device = torch.device(args.device)
+    dtype = getattr(torch, args.dtype)
+
+    # Save args in a json file
+    with open(results_dir / "args.json", "w") as f:
+        json.dump(args.__dict__, f, indent=4)
+
+    # Run PnP pipeline
+    pnp_pipeline(
+        dataset_name=args.dataset_name,
+        detections_path=detections_path,
+        results_dir=results_dir,
+        device=device,
+        dtype=dtype,
+        output_size=output_size,
+        batch_size=args.batch_size,
+        embedding_model=args.embedding_model,
+        embedding_batch_size=args.embedding_batch_size,
+        sim_threshold=args.sim_threshold,
+        patch_threshold=args.patch_threshold,
+        k_hypotheses=args.k_hypotheses,
+        render_templates=args.render_templates,
+    )
+
+    # Save predictions in BOP format
+    save_bop_results_from_predictions(
+        method_name=args.run_name,
+        dataset_name=args.dataset_name,
+        split=args.split,
+        save_dir=results_dir,
+        predictions_dir=results_dir / "predictions",
+    )
+
+
+if __name__ == "__main__":
+    main()

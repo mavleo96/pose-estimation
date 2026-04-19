@@ -6,8 +6,8 @@ from ..utils.image import get_crop_matrix, get_pad_matrix, get_resize_matrix
 
 
 def rle_to_mask(segmentation):
-    h, w = segmentation["size"]
-    rle = pycoco_mask_utils.frPyObjects(segmentation, h, w)
+    H, W = segmentation["size"]
+    rle = pycoco_mask_utils.frPyObjects(segmentation, H, W)
     return pycoco_mask_utils.decode(rle)  # (H, W) uint8, values 0 or 1
 
 

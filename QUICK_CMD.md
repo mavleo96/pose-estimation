@@ -27,7 +27,7 @@ cnos-fastsam_ycbv-test_f4f2127c-6f59-447c-95b3-28e1e591f1a1.json
 
 ## Run PnP pipeline
 ```bash
-python -m pose.inference \
+python -m pose.inference.pnp_pipeline \
     --run_name lmo-dinov2-pnp-224 \
     --dataset_name lmo \
     --detections_path /data/pose-estimation/bop_extra/default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_lmo-test_3cb298ea-e2eb-4713-ae9e-5a7134c5da0f.json \
@@ -35,6 +35,19 @@ python -m pose.inference \
     --dtype bfloat16 \
     --output_size 224 224 \
     --batch_size 4 \
+    --embedding_model dinov2 \
+    --render_templates
+
+python -m pose.inference.kabsch_pipeline \
+    --run_name lmo-dinov2-kabsch-224 \
+    --dataset_name lmo \
+    --detections_path /data/pose-estimation/bop_extra/default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_lmo-test_3cb298ea-e2eb-4713-ae9e-5a7134c5da0f.json \
+    --device cuda \
+    --dtype bfloat16 \
+    --output_size 224 224 \
+    --batch_size 4 \
+    --n_src_points 5000 \
+    --n_tar_points 1000 \
     --embedding_model dinov2 \
     --render_templates
 ```
