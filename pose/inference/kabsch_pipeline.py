@@ -1,6 +1,7 @@
 import argparse
 import json
 import logging
+import math
 import shutil
 import time
 from pathlib import Path
@@ -110,11 +111,17 @@ def kabsch_pipeline(
         )
 
     # ----------------------------- INFERENCE -----------------------------
+
+    # Compute inlier threshold as 10% of the average diameter
+    avg_diameter = np.mean([v["diameter"] for k, v in renderer.models_info.items()])
+    inlier_thresh = math.ceil(avg_diameter / 100) * 10
+    logger.info(f"Average diameter: {avg_diameter:.2f}mm, Inlier threshold: {inlier_thresh:.2f}mm")
+
     # Initialize matcher and pose estimator
     logger.info("Initializing matcher and pose estimator...")
     assert sim_threshold == 0.0
     matcher = PointCorrespondenceFinder(sim_threshold=sim_threshold)
-    pose_estimator = KabschPoseEstimator()
+    pose_estimator = KabschPoseEstimator(inlier_thresh=inlier_thresh)
     logger.info(matcher)
     logger.info(pose_estimator)
 
