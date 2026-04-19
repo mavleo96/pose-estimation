@@ -11,6 +11,9 @@ class KabschPoseEstimator:
     correspondences, retains the best hypothesis per batch item, then
     refits on the full inlier set using weighted Kabsch.
 
+    RANSAC loop is parallelized across iterations: all samples
+    are drawn and scored in chunks, eliminating the Python loop bottleneck.
+
     Args:
         max_iters (int): Number of RANSAC iterations. Default: 1000.
         inlier_thresh (float): Residual threshold (same units as input
@@ -18,17 +21,20 @@ class KabschPoseEstimator:
             For BOP-format datasets where points are in millimetres a
             value in the range 5–15 mm is typical; the default of 100.0
             seems reasonable based on experiments. Default: 100.0.
+        chunk_size (int): Number of hypotheses to evaluate in parallel.
+            Larger chunks are faster but use more memory. Default: 200.
     """
 
-    def __init__(self, max_iters=1000, inlier_thresh=100.0) -> None:
+    def __init__(self, max_iters=1000, inlier_thresh=100.0, chunk_size=200) -> None:
         self.max_iters = max_iters
         self.inlier_thresh = inlier_thresh
+        self.chunk_size = chunk_size
         self.sample_size = 3
 
     def __repr__(self):
         return (
             f"KabschPoseEstimator(max_iters={self.max_iters}, inlier_thresh={self.inlier_thresh},"
-            f" sample_size={self.sample_size})"
+            f" chunk_size={self.chunk_size}, sample_size={self.sample_size})"
         )
 
     def estimate_pose(self, src_pts, tgt_pts, mask=None):
@@ -79,33 +85,45 @@ class KabschPoseEstimator:
         if not valid_enough.any():
             return best_R, best_t, torch.zeros(B, device=device)
 
-        # RANSAC loop
-        # Note: we use uniform probabilities for invalid rows to avoid multinomial crash
-        # on all-zero rows
+        # Note: uniform probs for invalid rows to avoid multinomial crash on all-zero rows;
+        # results for invalid items are discarded by valid_enough guard
         sample_probs = torch.where(
             valid_enough[:, None], mask.float(), torch.ones_like(mask.float())
         )
-        for _ in range(self.max_iters):
-            sample_idx = torch.multinomial(sample_probs, self.sample_size, replacement=False)
-            sample_idx = sample_idx.unsqueeze(-1).expand(-1, -1, 3)
 
-            src_sample = src_pts.gather(1, sample_idx)
-            tgt_sample = tgt_pts.gather(1, sample_idx)
+        # RANSAC — all hypotheses are independent so we parallelize across iterations.
+        # We chunk to bound memory: each chunk scores (chunk_size, B, N, 3) simultaneously.
+        C = self.chunk_size
+        probs_chunk = sample_probs.repeat(C, 1)  # (C*B, N)
+        src_chunk = src_pts.repeat(C, 1, 1)  # (C*B, N, 3)
+        tgt_chunk = tgt_pts.repeat(C, 1, 1)  # (C*B, N, 3)
+        src_exp = src_pts.unsqueeze(0).expand(C, -1, -1, -1)  # (C, B, N, 3)
+        batch_arange = torch.arange(B, device=device)
 
-            R_hyp, t_hyp = self.kabsch(src_sample, tgt_sample)
+        for _ in range(0, self.max_iters, C):
+            # Draw C random minimal samples per batch item
+            idx = torch.multinomial(probs_chunk, self.sample_size, replacement=False)
+            idx_exp = idx.unsqueeze(-1).expand(-1, -1, 3)  # (C*B, 3, 3)
 
-            est_pts = einsum(R_hyp, src_pts, "b dt ds, b n ds -> b n dt") + t_hyp.unsqueeze(1)
-            errors = torch.norm(est_pts - tgt_pts, dim=2)
+            # Fit Kabsch on each hypothesis: (C*B, 3, 3) points -> (C*B, 3, 3), (C*B, 3)
+            R_c, t_c = self.kabsch(src_chunk.gather(1, idx_exp), tgt_chunk.gather(1, idx_exp))
+            R_c = R_c.reshape(C, B, 3, 3)
+            t_c = t_c.reshape(C, B, 3)
 
-            inlier_mask = (errors < self.inlier_thresh) & mask
-            num_inliers = inlier_mask.sum(dim=1)
+            # Score all C hypotheses at once: (C, B, N, 3)
+            est = einsum(R_c, src_exp, "c b dt ds, c b n ds -> c b n dt") + t_c.unsqueeze(2)
+            errors = torch.norm(est - tgt_pts.unsqueeze(0), dim=-1)  # (C, B, N)
+            n_inliers = ((errors < self.inlier_thresh) & mask.unsqueeze(0)).sum(-1)  # (C, B)
 
-            better = (num_inliers > best_num_inliers) & valid_enough
-            if better.any():
-                ids = torch.where(better)[0]
-                best_num_inliers[ids] = num_inliers[ids]
-                best_R[ids] = R_hyp[ids]
-                best_t[ids] = t_hyp[ids]
+            # Best hypothesis in this chunk per batch item
+            chunk_best = n_inliers.argmax(0)  # (B,)
+            chunk_best_n = n_inliers[chunk_best, batch_arange]  # (B,)
+            update = (chunk_best_n > best_num_inliers) & valid_enough
+            if update.any():
+                ids = torch.where(update)[0]
+                best_num_inliers[ids] = chunk_best_n[ids]
+                best_R[ids] = R_c[chunk_best[ids], ids]
+                best_t[ids] = t_c[chunk_best[ids], ids]
 
         # Refit using inliers
         est_pts = einsum(best_R, src_pts, "b dt ds, b n ds -> b n dt") + best_t.unsqueeze(1)
