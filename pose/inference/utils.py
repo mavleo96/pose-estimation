@@ -3,11 +3,14 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import trimesh
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from ..data.template import TemplateViewDataset
+from ..utils.geometry import get_visible_point_projections
 from ..utils.image import sample_patch_centers
+from ..utils.operations import interpolate_embeddings
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -133,3 +136,88 @@ def precompute_pca(embeddings_dir, pca, patch_size):
 
     np.save(embeddings_dir / "pca_embeddings.npy", pca_embeddings)
     torch.save(pca.state_dict(), embeddings_dir / "pca.pt")
+
+
+def precompute_point_embeddings(
+    dataset_name,
+    data_dir,
+    embeddings_dir,
+    obj_ids,
+    K,
+    image_size,
+    patch_size,
+    num_points=1000,
+):
+    """
+    Precompute point embeddings for each object and save to disk.
+
+    Args:
+        dataset_name: str         — BOP dataset name (e.g. "lmo", "ycbv")
+        data_dir: str | Path      — root data directory
+        embeddings_dir: str | Path — directory containing embeddings.npy
+        obj_ids: list[int]        — object ids to precompute point embeddings for
+        K: np.ndarray             — camera intrinsics
+        image_size: tuple[int]    — (H, W) image size
+        patch_size: int           — patch size used to downsample the masks
+        num_points: int           — number of points to sample from the object mesh
+
+    Saves:
+        embeddings_dir/points.npy    — (N_objects, N_points, 3) float32
+        embeddings_dir/point_embeddings.npy — (N_objects, N_points, D) float32
+    """
+    templates_path = Path(data_dir) / "templates" / dataset_name
+    data_path = Path(data_dir) / dataset_name
+
+    template_embeddings = torch.from_numpy(np.load(embeddings_dir / "pca_embeddings.npy")).float()
+    _, T, _, D = template_embeddings.shape
+
+    # create camera intrinsics adjusted for template resize
+    with np.load(embeddings_dir / "templates.npz") as templates:
+        template_M = templates["M"]
+    K_adj = template_M @ K
+
+    # precompute point embeddings for each object
+    points_list = []
+    point_embeddings_list = []
+    for i, obj_id in enumerate(obj_ids):
+        # 1. load model and poses
+        model = trimesh.load(data_path / "models" / f"obj_{obj_id:06d}.ply", process=False)
+        T_m2c = np.load(templates_path / "object_poses" / f"{obj_id:06d}.npy")
+
+        # 2. sample points from the object mesh
+        points, _ = trimesh.sample.sample_surface(model, num_points)
+
+        # 3. initialize point embeddings and point accum count
+        point_embeddings = torch.zeros((num_points, D))
+        point_accum_count = torch.zeros((num_points, 1))
+
+        # 4. precompute point embeddings for each template
+        for tid in tqdm(range(T), desc=f"precomputing point embeddings for obj {obj_id:06d}"):
+            # a. get points visible from given pose and 2d projection
+            point_mapping, pixel_coords = get_visible_point_projections(
+                points, model, K_adj[i, tid], T_m2c[tid]
+            )
+
+            # b. interpolate embedding for the point
+            interpolated_embedding = interpolate_embeddings(
+                template_embeddings[i, tid],
+                torch.tensor(pixel_coords),
+                patch_size,
+                image_size,
+            )
+
+            # c. accumulate embeddings for the points
+            point_embeddings[point_mapping] += interpolated_embedding
+            point_accum_count[point_mapping, 0] += 1
+
+        # normalize point embeddings by point accum count
+        point_embeddings /= torch.where(point_accum_count > 0, point_accum_count, 1)
+
+        points_list.append(points)
+        point_embeddings_list.append(point_embeddings.numpy())
+
+    points = np.stack(points_list, axis=0)
+    point_embeddings = np.stack(point_embeddings_list, axis=0)
+
+    np.save(embeddings_dir / "points.npy", points)
+    np.save(embeddings_dir / "point_embeddings.npy", point_embeddings)

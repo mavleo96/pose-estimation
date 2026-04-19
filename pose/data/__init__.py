@@ -1,3 +1,4 @@
+from .point import ObjectPointDataset
 from .query import QueryDataset
 from .sampler import ImageGroupedBatchSampler, QueryDataCollator, SceneDataCollator
 from .scene import SceneDataset
@@ -8,6 +9,7 @@ __all__ = [
     "QueryDataset",
     "TemplateDataset",
     "TemplateViewDataset",
+    "ObjectPointDataset",
     "ImageGroupedBatchSampler",
     "QueryDataCollator",
     "SceneDataCollator",

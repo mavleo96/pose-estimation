@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from kornia.geometry.conversions import (
     euler_from_quaternion,
@@ -5,6 +6,7 @@ from kornia.geometry.conversions import (
     quaternion_to_rotation_matrix,
     rotation_matrix_to_quaternion,
 )
+from trimesh.ray.ray_pyembree import RayMeshIntersector
 
 
 def euler_to_rotation_matrix(roll, pitch, yaw):
@@ -89,12 +91,59 @@ def apply_inverse_transform(pts3d, T):
     return result.transpose(-2, -1)[..., :3]  # (..., N, 3)
 
 
+def get_visible_point_projections(points, model, K, T_m2c):
+    """
+    find pixel coordinates of 3D model points visible from a given camera pose
+
+    casts a ray from the camera origin to each point and checks if the first mesh
+    intersection occurs at the point itself — if not, the point is occluded.
+
+    Args:
+        points  : (N, 3) np.ndarray  — 3D model points in model space
+        mesh    : trimesh.Trimesh    — mesh
+        K       : (3, 3) np.ndarray  — camera intrinsics
+        T_m2c   : (4, 4) np.ndarray  — model-to-camera transform
+
+    Returns:
+        point_mapping : (V,) np.int32   — indices of visible points into points
+        pixel_coords  : (V, 2) np.int32 — (x, y) pixel coordinates of visible points
+    """
+    R = T_m2c[:3, :3]
+    t = T_m2c[:3, 3]
+
+    # transform points to camera coordinates
+    p_cam = points @ R.T + t
+
+    # direction of the points
+    dirs = p_cam / np.linalg.norm(p_cam, axis=-1, keepdims=True)
+
+    # get valid points for camera view by checking if intersection distance matches
+    # distance from origin
+    intersector = RayMeshIntersector(model.copy().apply_transform(T_m2c))
+    locations, index_ray, _ = intersector.intersects_location(
+        np.zeros_like(dirs), dirs, multiple_hits=False
+    )
+    visible_ray = np.full(points.shape[0], False)
+    hit_dist = np.linalg.norm(locations, axis=1)
+    point_dist = np.linalg.norm(p_cam, axis=1)
+    visible_ray[index_ray] = np.abs(hit_dist - point_dist[index_ray]) < 1e-6
+
+    # get pixel coordinates for valid points
+    # point in camera coordinates @ adjusted camera matrix
+    pixel_coords_homo = p_cam[visible_ray] @ K.T
+    pixel_coords = (pixel_coords_homo[:, :2] / pixel_coords_homo[:, [2]]).astype(np.int32)
+    point_mapping = np.argwhere(visible_ray).reshape(-1).astype(np.int32)
+
+    return point_mapping, pixel_coords
+
+
 __all__ = [
     "euler_to_rotation_matrix",
     "rotation_matrix_to_euler",
     "transform_from_Rt",
     "backproject_points",
     "apply_inverse_transform",
+    "get_visible_point_projections",
 ]
 
 if __name__ == "__main__":

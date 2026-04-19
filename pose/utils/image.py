@@ -39,6 +39,45 @@ def sample_patch_centers(x, patch_size):
     return x[..., patch_size // 2 :: patch_size, patch_size // 2 :: patch_size]
 
 
+def sample_pixels_from_masks(mask, N):
+    """
+    sample N pixels from the mask without replacement
+
+    mask: (B, H, W)
+    N: int
+    Returns:
+        (B, N, 2): (B, N, 2)
+        (B, N): (B, N)
+    """
+    B, _, _ = mask.shape
+
+    pixels = torch.zeros((B, N, 2), device=mask.device, dtype=torch.long)
+    pixel_mask = torch.zeros((B, N), device=mask.device, dtype=torch.bool)
+
+    for i in range(B):
+        # randomly sample pixels from the mask (no replacement)
+        inside_mask_indices = torch.argwhere(mask[i])
+        num_available = inside_mask_indices.shape[0]
+
+        if num_available == 0:
+            # No pixels in mask
+            continue
+        elif num_available <= N:
+            # Sample all available pixels without replacement
+            indices = torch.randperm(num_available)
+        else:
+            # Sample N pixels without replacement
+            indices = torch.randperm(num_available)[:N]
+            num_available = N
+
+        x, y = inside_mask_indices[indices, 1], inside_mask_indices[indices, 0]
+        pixels[i, :num_available, 0] = x
+        pixels[i, :num_available, 1] = y
+        pixel_mask[i, :num_available] = True
+
+    return pixels, pixel_mask
+
+
 def apply_inverse_homography(pts2d, M):
     """
     find pts s.t. M * pts = pts2d

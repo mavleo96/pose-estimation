@@ -1,3 +1,4 @@
 from .patch import PatchCorrespondenceFinder
+from .point import PointCorrespondenceFinder
 
-__all__ = ["PatchCorrespondenceFinder"]
+__all__ = ["PatchCorrespondenceFinder", "PointCorrespondenceFinder"]
