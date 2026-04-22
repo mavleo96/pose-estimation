@@ -175,7 +175,9 @@ def dift_pipeline(
         query_M = batch["M"].to(device)
         query_cam_K = batch["cam_K"].to(device)
 
-        query_depth_cond = midas_depth_transform(query_depth).unsqueeze(1).expand(-1, 3, -1, -1)
+        query_depth_cond = (
+            midas_depth_transform(query_depth).unsqueeze(1).expand(-1, 3, -1, -1).to(dtype)
+        )
 
         # Compute query embeddings
         with torch.no_grad():
