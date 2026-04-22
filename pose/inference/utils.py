@@ -11,7 +11,7 @@ from ..data.template import TemplateViewDataset
 from ..data.transforms import imagenet_transform
 from ..utils.geometry import get_visible_point_projections
 from ..utils.image import sample_patch_centers
-from ..utils.operations import interpolate_embeddings
+from ..utils.operations import interpolate_embeddings, interpolate_embeddings_conv
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -151,6 +151,7 @@ def precompute_point_embeddings(
     image_size,
     patch_size,
     num_points=1000,
+    use_interpolate_embeddings_conv=False,
 ):
     """
     Precompute point embeddings for each object and save to disk.
@@ -163,8 +164,10 @@ def precompute_point_embeddings(
         K: np.ndarray             — camera intrinsics
         image_size: tuple[int]    — (H, W) image size
         patch_size: int           — patch size used to downsample the masks
+                                    (or effective stride)
         num_points: int           — number of points to sample from the object mesh
-
+        use_interpolate_embeddings_conv: bool — whether to use interpolate_embeddings_conv
+                                instead of interpolate_embeddings. Default: False.
     Saves:
         embeddings_dir/points.npy    — (N_objects, N_points, 3) float32
         embeddings_dir/point_embeddings.npy — (N_objects, N_points, D) float32
@@ -179,6 +182,11 @@ def precompute_point_embeddings(
     with np.load(embeddings_dir / "templates.npz") as templates:
         template_M = templates["M"]
     K_adj = template_M @ K
+
+    # interpolate function
+    interpolate_func = (
+        interpolate_embeddings_conv if use_interpolate_embeddings_conv else interpolate_embeddings
+    )
 
     # precompute point embeddings for each object
     points_list = []
@@ -203,7 +211,7 @@ def precompute_point_embeddings(
             )
 
             # b. interpolate embedding for the point
-            interpolated_embedding = interpolate_embeddings(
+            interpolated_embedding = interpolate_func(
                 template_embeddings[i, tid],
                 torch.tensor(pixel_coords),
                 patch_size,

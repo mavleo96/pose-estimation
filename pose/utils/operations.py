@@ -50,4 +50,51 @@ def interpolate_embeddings(patch_embeddings, pixel_coords, patch_size, image_siz
     return sampled.squeeze(0, -1).permute(1, 0)  # (1, D, N, 1) -> (N, D)
 
 
-__all__ = ["interpolate_embeddings"]
+def interpolate_embeddings_conv(patch_embeddings, pixel_coords, stride, image_size):
+    H, W = image_size
+    H_feat, W_feat = H // stride, W // stride
+    D = patch_embeddings.shape[1]
+    device, dtype = patch_embeddings.device, patch_embeddings.dtype
+
+    feat = patch_embeddings.reshape(1, H_feat, W_feat, D).permute(0, 3, 1, 2)
+
+    grid = pixel_coords.clone().to(dtype=dtype, device=device)
+    grid[:, 0] = (grid[:, 0] / stride + 0.5) / W_feat * 2 - 1
+    grid[:, 1] = (grid[:, 1] / stride + 0.5) / H_feat * 2 - 1
+    grid = grid.view(1, -1, 1, 2)
+
+    sampled = F.grid_sample(feat, grid, mode="bilinear", align_corners=False, padding_mode="border")
+    return sampled.squeeze(0, -1).permute(1, 0)
+
+
+def midas_depth_transform(depth):
+    """
+    Convert depth map to MiDaS-style disparity.
+
+    Closest pixels map to 1, farthest to 0. Invalid (zero) depth pixels
+    are filled with the maximum valid depth before inversion so they
+    appear as background (low disparity).
+
+    Args:
+        depth: (..., H, W) float tensor
+    Returns:
+        disparity: (..., H, W) tensor in [0, 1]
+    """
+    depth = depth.clone()
+    valid_mask = depth > 0.0
+
+    if not valid_mask.any():
+        return torch.zeros_like(depth)
+
+    depth[~valid_mask] = depth[valid_mask].max()
+    depth = 1.0 / (depth + 1e-6)
+
+    d_min = depth[valid_mask].min()
+    d_max = depth[valid_mask].max()
+    depth = (depth - d_min) / (d_max - d_min + 1e-6)
+    depth = depth.clamp(0.0, 1.0)
+
+    return depth
+
+
+__all__ = ["interpolate_embeddings", "interpolate_embeddings_conv", "midas_depth_transform"]

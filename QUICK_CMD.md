@@ -50,6 +50,21 @@ python -m pose.inference.kabsch_pipeline \
     --n_tar_points 1000 \
     --embedding_model dinov2 \
     --render_templates
+
+
+python -m pose.inference.dift_pipeline \
+    --run_name lmo-depthdift-kabsch-512 \
+    --dataset_name lmo \
+    --detections_path /data/pose-estimation/bop_extra/default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_lmo-test_3cb298ea-e2eb-4713-ae9e-5a7134c5da0f.json \
+    --device cuda \
+    --dtype bfloat16 \
+    --output_size 512 512 \
+    --batch_size 4 \
+    --up_block_indices 1 2 \
+    --timestep 50 \
+    --ensemble_size 4 \
+    --embedding_batch_size 4 \
+    --render_templates
 ```
 
 ## BOP Evaluation
