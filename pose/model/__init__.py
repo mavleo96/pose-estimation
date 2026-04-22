@@ -1,3 +1,4 @@
+from .dift import ControlNetDIFT
 from .embedding_model import Dinov2EmbeddingModel, Dinov3EmbeddingModel
 from .pca import PCA
 
@@ -6,4 +7,4 @@ MODEL_MAP = {
     "dinov3": Dinov3EmbeddingModel,
 }
 
-__all__ = ["PCA", "Dinov2EmbeddingModel", "Dinov3EmbeddingModel", "MODEL_MAP"]
+__all__ = ["PCA", "Dinov2EmbeddingModel", "Dinov3EmbeddingModel", "MODEL_MAP", "ControlNetDIFT"]
