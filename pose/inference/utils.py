@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from ..data.template import TemplateViewDataset
+from ..data.transforms import imagenet_transform
 from ..utils.geometry import get_visible_point_projections
 from ..utils.image import sample_patch_centers
 from ..utils.operations import interpolate_embeddings
@@ -20,12 +21,13 @@ def precompute_embeddings(
     dataset_name,
     data_dir,
     obj_ids,
-    encoder,
+    model_wrapper,
     batch_size,
     embeddings_dir,
     output_size,
     depth_scale,
     num_workers=4,
+    rgb_transform=None,
 ):
     """
     Run encoder forward pass over all template views and save patch embeddings to disk.
@@ -34,12 +36,14 @@ def precompute_embeddings(
         dataset_name  : str         — BOP dataset name (e.g. "lmo", "ycbv")
         data_dir      : str | Path  — root data directory
         obj_ids       : list[int]   — object ids to precompute embeddings for
-        encoder       : nn.Module   — embedding model with forward returning "patch_embeddings"
+        model_wrapper : callable    — function that takes a batch and returns patch embeddings
         batch_size    : int         — number of template views per forward pass
         embeddings_dir: str | Path  — output directory for embeddings and templates
         output_size   : tuple[int]  — (H, W) output size for template images
         depth_scale   : float       — depth scale to convert raw uint16 depth to mm
         num_workers   : int         — number of DataLoader workers. Default: 4.
+        rgb_transform : callable    — function that takes a rgb image and returns a tensor.
+                        If None, uses imagenet_transform. Default: None.
 
     Saves:
         embeddings_dir/embeddings.npy     — (N_objects, N_views, N_patches, D) float32
@@ -48,9 +52,9 @@ def precompute_embeddings(
     embeddings_dir = Path(embeddings_dir)
     embeddings_dir.mkdir(parents=True, exist_ok=True)
 
-    templates_path = Path(data_dir) / "templates" / dataset_name
+    rgb_transform = rgb_transform or imagenet_transform
 
-    encoder.eval()
+    templates_path = Path(data_dir) / "templates" / dataset_name
 
     embeddings_list = []
     M_list = []
@@ -59,7 +63,9 @@ def precompute_embeddings(
     mask_list = []
 
     for obj_id in obj_ids:
-        template_dataset = TemplateViewDataset(templates_path, obj_id, output_size, depth_scale)
+        template_dataset = TemplateViewDataset(
+            templates_path, obj_id, output_size, depth_scale, rgb_transform
+        )
         dataloader = DataLoader(
             template_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers
         )
@@ -71,9 +77,7 @@ def precompute_embeddings(
         object_mask_list = []
 
         for batch in tqdm(dataloader, desc=f"precomputing embeddings for obj {obj_id:06d}"):
-            rgb = batch["rgb"].to(encoder.device, dtype=encoder.dtype)
-            with torch.no_grad():
-                patch_embeddings = encoder(rgb)["patch_embeddings"]
+            patch_embeddings = model_wrapper(batch)
 
             object_embeddings_list.append(patch_embeddings.float().cpu().numpy())
             object_M_list.append(batch["M"].numpy())

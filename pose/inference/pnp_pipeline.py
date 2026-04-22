@@ -63,9 +63,16 @@ def pnp_pipeline(
     model = MODEL_MAP[embedding_model]()
     pca = PCA(d=model.dim, n_components=256)
     model.to(device, dtype)
+    model.eval()
     pca.to(device, dtype)
     logger.info(model)
     logger.info(pca)
+
+    def model_wrapper(batch):
+        rgb = batch["rgb"].to(device, dtype=dtype)
+        with torch.no_grad():
+            output = model(rgb)["patch_embeddings"]
+        return output
 
     # Precompute embeddings and PCA
     logger.info("Precomputing embeddings and PCA...")
@@ -73,7 +80,7 @@ def pnp_pipeline(
         dataset_name=dataset_name,
         data_dir=data_root,
         obj_ids=renderer.obj_ids,
-        encoder=model,
+        model_wrapper=model_wrapper,
         batch_size=embedding_batch_size,
         embeddings_dir=embeddings_dir,
         output_size=output_size,
