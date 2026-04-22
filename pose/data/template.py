@@ -2,11 +2,11 @@ from pathlib import Path
 
 import numpy as np
 import torch
-import torchvision.transforms as transforms
 from PIL import Image
 from torch.utils.data import Dataset
 
 from ..utils.io import load_camera_intrinsics, load_models_info
+from .transforms import imagenet_transform
 from .utils import get_bbox, process_rgb_and_depth
 
 
@@ -91,12 +91,7 @@ class TemplateViewDataset(Dataset):
         # Load RGB image paths for the object
         self.rgb_paths = sorted(self.object_dir.glob("*[0-9].png"), key=lambda x: int(x.stem))
 
-        self.rgb_transform = rgb_transform or transforms.Compose(
-            [
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ]
-        )
+        self.rgb_transform = rgb_transform or imagenet_transform
 
     def __len__(self):
         return len(self.rgb_paths)

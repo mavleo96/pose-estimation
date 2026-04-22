@@ -3,10 +3,10 @@ from pathlib import Path
 
 import numpy as np
 import torch
-import torchvision.transforms as transforms
 from PIL import Image
 from torch.utils.data import Dataset
 
+from .transforms import imagenet_transform
 from .utils import process_rgb_and_depth, rle_to_mask
 
 
@@ -33,12 +33,7 @@ class QueryDataset(Dataset):
         self.image_info = self.load_image_info()
         self.detections = self.load_detections()
 
-        self.rgb_transform = rgb_transform or transforms.Compose(
-            [
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ]
-        )
+        self.rgb_transform = rgb_transform or imagenet_transform
 
     def load_image_info(self):
         image_info = {}
