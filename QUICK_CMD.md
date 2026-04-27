@@ -1,4 +1,11 @@
+## Environment Setup
+Creates conda env `pose` from `env2.yml` (repo root is detected automatically so `./bop_toolkit` and `./sonata` resolve). If `pose` already exists: `conda env remove -n pose` first.
 
+```bash
+bash scripts/setup_env.sh
+```
+
+Flash-attn uses a **community prebuilt wheel** (see script comments and [flash-attention#2425](https://github.com/Dao-AILab/flash-attention/issues/2425)); other Python tags / finder: [flashattn.dev](https://flashattn.dev/). If the wheel fails, build from source with `TORCH_CUDA_ARCH_LIST` and `pip install flash-attn --no-build-isolation` as documented in `scripts/setup_env.sh` comments.
 
 ## PCR using kabsch
 ```bash
@@ -75,5 +82,6 @@ BOP_PATH=/data/pose-estimation python bop_toolkit/scripts/eval_bop19_pose.py \
     --results_path /data/pose-estimation/results/lmo-dinov2-pnp-224 \
     --eval_path /data/pose-estimation/results/lmo-dinov2-pnp-224/bop_eval \
     --result_filenames=lmo-dinov2-pnp-224_lmo-test.csv \
-    --num_workers=1
+    --num_workers=1 \
+    --cleanup_eval
 ```

@@ -8,4 +8,11 @@ MODEL_MAP = {
     "dinov3": Dinov3EmbeddingModel,
 }
 
-__all__ = ["PCA", "Dinov2EmbeddingModel", "Dinov3EmbeddingModel", "MODEL_MAP", "ControlNetDIFT", "SonataEncoderModel"]
+__all__ = [
+    "PCA",
+    "Dinov2EmbeddingModel",
+    "Dinov3EmbeddingModel",
+    "MODEL_MAP",
+    "ControlNetDIFT",
+    "SonataEncoderModel",
+]

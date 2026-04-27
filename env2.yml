@@ -1,4 +1,4 @@
-name: pose2
+name: pose
 channels:
   - conda-forge
   - nvidia
@@ -160,11 +160,11 @@ dependencies:
       - torch @ https://download.pytorch.org/whl/cu128/torch-2.11.0%2Bcu128-cp310-cp310-manylinux_2_28_x86_64.whl
       - torchvision @ https://download.pytorch.org/whl/cu128/torchvision-0.26.0%2Bcu128-cp310-cp310-manylinux_2_28_x86_64.whl
       - spconv-cu124==2.3.8
-      # - torch-scatter --find-links https://data.pyg.org/whl/torch-2.5.0+cu124.html
       - tornado==6.5.5
       - tqdm==4.67.3
       - traitlets==5.14.3
       - transformers==5.3.0
+      - diffusers==0.37.1
       - trimesh==4.11.5
       - triton==3.6.0
       - typer==0.24.1
