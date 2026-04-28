@@ -1,4 +1,3 @@
-import logging
 from pathlib import Path
 
 import numpy as np
@@ -12,9 +11,6 @@ from ..data.transforms import imagenet_transform
 from ..utils.geometry import get_visible_point_projections
 from ..utils.image import sample_patch_centers
 from ..utils.operations import interpolate_embeddings, interpolate_embeddings_conv
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 def precompute_embeddings(
@@ -142,32 +138,32 @@ def precompute_pca(embeddings_dir, pca, patch_size):
     torch.save(pca.state_dict(), embeddings_dir / "pca.pt")
 
 
-def precompute_pca2(embeddings_dir, pca):
-    """
-    Fit PCA on precomputed point embeddings and save projected embeddings to disk.
+# def precompute_pca2(embeddings_dir, pca):
+#     """
+#     Fit PCA on precomputed point embeddings and save projected embeddings to disk.
 
-    Args:
-        embeddings_dir: str | Path  — directory containing point_embeddings.npy
-        pca           : PCA         — unfitted PCA module (nn.Module with fit/forward)
+#     Args:
+#         embeddings_dir: str | Path  — directory containing point_embeddings.npy
+#         pca           : PCA         — unfitted PCA module (nn.Module with fit/forward)
 
-    Saves:
-        embeddings_dir/point_pca_embeddings.npy — (N_objects, N_points, D_pca) float32
-        embeddings_dir/pca2.pt             — PCA state dict (mean, eigenvectors)
-    """
-    embeddings_dir = Path(embeddings_dir)
+#     Saves:
+#         embeddings_dir/point_pca_embeddings.npy — (N_objects, N_points, D_pca) float32
+#         embeddings_dir/pca2.pt             — PCA state dict (mean, eigenvectors)
+#     """
+#     embeddings_dir = Path(embeddings_dir)
 
-    embeddings = torch.from_numpy(np.load(embeddings_dir / "point_embeddings.npy")).float()
-    pca.fit(embeddings.flatten(start_dim=0, end_dim=1))
+#     embeddings = torch.from_numpy(np.load(embeddings_dir / "point_embeddings.npy")).float()
+#     pca.fit(embeddings.flatten(start_dim=0, end_dim=1))
 
-    pca_embeddings_list = []
-    for i in range(embeddings.shape[0]):
-        pca_embedding = pca(embeddings[i].to(pca.device, dtype=pca.dtype))
-        pca_embeddings_list.append(pca_embedding.float().cpu().numpy())
+#     pca_embeddings_list = []
+#     for i in range(embeddings.shape[0]):
+#         pca_embedding = pca(embeddings[i].to(pca.device, dtype=pca.dtype))
+#         pca_embeddings_list.append(pca_embedding.float().cpu().numpy())
 
-    pca_embeddings = np.stack(pca_embeddings_list, axis=0)
+#     pca_embeddings = np.stack(pca_embeddings_list, axis=0)
 
-    np.save(embeddings_dir / "point_pca_embeddings.npy", pca_embeddings)
-    torch.save(pca.state_dict(), embeddings_dir / "pca2.pt")
+#     np.save(embeddings_dir / "point_pca_embeddings.npy", pca_embeddings)
+#     torch.save(pca.state_dict(), embeddings_dir / "pca2.pt")
 
 
 def precompute_point_embeddings(
@@ -263,41 +259,41 @@ def precompute_point_embeddings(
     np.save(embeddings_dir / "point_embeddings.npy", point_embeddings)
 
 
-def precompute_geometric_embeddings(
-    dataset_name,
-    data_dir,
-    embeddings_dir,
-    obj_ids,
-    model_wrapper,
-    num_points=5000,
-):
-    data_path = Path(data_dir) / dataset_name
+# def precompute_geometric_embeddings(
+#     dataset_name,
+#     data_dir,
+#     embeddings_dir,
+#     obj_ids,
+#     model_wrapper,
+#     num_points=5000,
+# ):
+#     data_path = Path(data_dir) / dataset_name
 
-    # precompute embeddings for each object
-    points_list = []
-    point_embeddings_list = []
-    for obj_id in obj_ids:
-        # 1. load model and poses
-        model = trimesh.load(data_path / "models" / f"obj_{obj_id:06d}.ply", process=False)
+#     # precompute embeddings for each object
+#     points_list = []
+#     point_embeddings_list = []
+#     for obj_id in obj_ids:
+#         # 1. load model and poses
+#         model = trimesh.load(data_path / "models" / f"obj_{obj_id:06d}.ply", process=False)
 
-        # 2. sample points and normals from the object mesh
-        coords, face_idx, colors = trimesh.sample.sample_surface(
-            model, num_points, sample_color=True
-        )
-        normals = model.face_normals[face_idx]
-        points = {
-            "coord": np.array(coords),
-            "normal": np.array(normals),
-            "color": np.array(colors)[:, :3],
-        }
+#         # 2. sample points and normals from the object mesh
+#         coords, face_idx, colors = trimesh.sample.sample_surface(
+#             model, num_points, sample_color=True
+#         )
+#         normals = model.face_normals[face_idx]
+#         points = {
+#             "coord": np.array(coords),
+#             "normal": np.array(normals),
+#             "color": np.array(colors)[:, :3],
+#         }
 
-        point_embeddings = model_wrapper(points)
-        points_list.append(coords)
-        point_embeddings_list.append(point_embeddings.float().cpu().numpy())
-        logger.info(f"Precomputed geometric embeddings for obj {obj_id:06d}")
+#         point_embeddings = model_wrapper(points)
+#         points_list.append(coords)
+#         point_embeddings_list.append(point_embeddings.float().cpu().numpy())
+#         logger.info(f"Precomputed geometric embeddings for obj {obj_id:06d}")
 
-    points = np.stack(points_list, axis=0)
-    point_embeddings = np.stack(point_embeddings_list, axis=0)
+#     points = np.stack(points_list, axis=0)
+#     point_embeddings = np.stack(point_embeddings_list, axis=0)
 
-    np.save(embeddings_dir / "points.npy", points)
-    np.save(embeddings_dir / "point_embeddings.npy", point_embeddings)
+#     np.save(embeddings_dir / "points.npy", points)
+#     np.save(embeddings_dir / "point_embeddings.npy", point_embeddings)

@@ -1,7 +1,6 @@
 from .dift import ControlNetDIFT
 from .embedding_model import Dinov2EmbeddingModel, Dinov3EmbeddingModel
 from .pca import PCA
-from .sonata import SonataEncoderModel
 
 MODEL_MAP = {
     "dinov2": Dinov2EmbeddingModel,
@@ -14,5 +13,4 @@ __all__ = [
     "Dinov3EmbeddingModel",
     "MODEL_MAP",
     "ControlNetDIFT",
-    "SonataEncoderModel",
 ]
