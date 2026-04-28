@@ -72,6 +72,20 @@ python -m pose.inference.dift_pipeline \
     --ensemble_size 4 \
     --embedding_batch_size 4 \
     --render_templates
+
+python -m pose.inference.sonata_pipeline \
+    --run_name lmo-sonata-kabsch-256 \
+    --dataset_name lmo \
+    --detections_path /data/pose-estimation/bop_extra/default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_lmo-test_3cb298ea-e2eb-4713-ae9e-5a7134c5da0f.json \
+    --device cuda \
+    --dtype bfloat16 \
+    --output_size 256 256 \
+    --batch_size 4 \
+    --n_src_points 5000 \
+    --n_tar_points 1000 \
+    --grid_size 0.01 \
+    --coord_scale 0.01 \
+    --enc_patch_size 128
 ```
 
 ## BOP Evaluation
