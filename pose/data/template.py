@@ -25,7 +25,7 @@ class TemplateDataset:
         embeddings = dataset[dataset.get_index([1, 6])]["embedding"]  # (2, n_views, n_patches, D)
     """
 
-    def __init__(self, dataset_name, data_dir, embeddings_dir):
+    def __init__(self, dataset_name, data_dir, embeddings_dir, embedding_file):
         self.dataset_name = dataset_name
 
         self.data_path = Path(data_dir) / dataset_name
@@ -48,9 +48,7 @@ class TemplateDataset:
         self.T_m2c = torch.from_numpy(np.stack(T_m2c_list, axis=0)).float()
 
         # Load embeddings
-        self.embeddings = torch.from_numpy(
-            np.load(self.embeddings_dir / "pca_embeddings.npy")
-        ).float()
+        self.embeddings = torch.from_numpy(np.load(self.embeddings_dir / embedding_file)).float()
 
         # Load templates
         with np.load(self.embeddings_dir / "templates.npz") as f:

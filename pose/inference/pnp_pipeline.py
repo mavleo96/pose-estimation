@@ -119,7 +119,9 @@ def pnp_pipeline(
 
     # Load template and query datasets
     logger.info("Loading template and query datasets...")
-    template_dataset = TemplateDataset(dataset_name, data_root, embeddings_dir)
+    template_dataset = TemplateDataset(
+        dataset_name, data_root, embeddings_dir, "pca_embeddings.npy"
+    )
     query_dataset = QueryDataset(dataset_name, data_root, detections_path, output_size)
 
     sampler = ImageGroupedBatchSampler(query_dataset, batch_size=batch_size)

@@ -134,7 +134,9 @@ def kabsch_pipeline(
 
     # Load template and query datasets
     logger.info("Loading template and query datasets...")
-    object_dataset = ObjectPointDataset(dataset_name, data_root, embeddings_dir)
+    object_dataset = ObjectPointDataset(
+        dataset_name, data_root, embeddings_dir, "point_embeddings.npy"
+    )
     query_dataset = QueryDataset(dataset_name, data_root, detections_path, output_size)
 
     sampler = ImageGroupedBatchSampler(query_dataset, batch_size=batch_size)

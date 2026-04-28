@@ -18,7 +18,7 @@ class ObjectPointDataset:
         points = dataset[dataset.get_index([1, 6])]["points"]  # (N, 3)
     """
 
-    def __init__(self, dataset_name, data_dir, embeddings_dir):
+    def __init__(self, dataset_name, data_dir, embeddings_dir, embedding_file):
         self.dataset_name = dataset_name
 
         self.data_path = Path(data_dir) / dataset_name
@@ -30,7 +30,7 @@ class ObjectPointDataset:
 
         # Load embeddings
         self.point_embeddings = torch.from_numpy(
-            np.load(self.embeddings_dir / "point_embeddings.npy")
+            np.load(self.embeddings_dir / embedding_file)
         ).float()
 
         # Load points

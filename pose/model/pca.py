@@ -24,9 +24,14 @@ class PCA(nn.Module):
         return self.e.dtype
 
     @torch.no_grad()
-    def fit(self, x):
-        assert x.ndim > 1
+    def fit(self, x, subsample=False, num_samples=500000):
+        assert x.ndim == 2
         assert x.shape[-1] == self.d
+        assert not subsample or num_samples > 0
+
+        if subsample and x.shape[0] > num_samples:
+            indices = torch.randperm(x.shape[0])[:num_samples]
+            x = x[indices]
 
         # Note: we fit on CPU to avoid out of memory errors and in float32 to avoid precision issues
         x_cpu = x.reshape(-1, self.d).cpu().float()
