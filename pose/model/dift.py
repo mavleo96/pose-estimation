@@ -3,17 +3,16 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from diffusers import AutoencoderKL, ControlNetModel, DDPMScheduler, UNet2DConditionModel
+from diffusers import AutoencoderKL, DDPMScheduler, UNet2DConditionModel
 
 _MODEL_DIR = Path(__file__).parent
 
 
-class ControlNetDIFT(nn.Module):
+class DIFT(nn.Module):
     """
-    Depth-conditioned Image-to-Feature Transformer (DIFT).
+    Canonical DIFT model.
     """
 
-    controlnet_id = "lllyasviel/sd-controlnet-depth"
     unet_id = "runwayml/stable-diffusion-v1-5"
 
     # stride = 8
@@ -27,7 +26,6 @@ class ControlNetDIFT(nn.Module):
         self.scheduler = DDPMScheduler.from_pretrained(self.unet_id, subfolder="scheduler")
         self.vae = AutoencoderKL.from_pretrained(self.unet_id, subfolder="vae")
         self.unet = UNet2DConditionModel.from_pretrained(self.unet_id, subfolder="unet")
-        self.controlnet = ControlNetModel.from_pretrained(self.controlnet_id)
 
         self.register_buffer("null_emb", torch.load(_MODEL_DIR / "null_emb.pt", weights_only=True))
 
@@ -60,7 +58,6 @@ class ControlNetDIFT(nn.Module):
 
     def enable_xformers(self):
         self.unet.enable_xformers_memory_efficient_attention()
-        self.controlnet.enable_xformers_memory_efficient_attention()
 
     def _register_hooks(self):
         for block_idx in self.up_block_indices:
@@ -87,9 +84,8 @@ class ControlNetDIFT(nn.Module):
         noise = torch.randn(latent.shape, generator=generator, device=self.device, dtype=self.dtype)
         return self.scheduler.add_noise(latent, noise, self.timestep)
 
-    def forward(self, rgb, depth_cond, ensemble_size=1, skip_controlnet=False):
+    def forward(self, rgb, ensemble_size=1):
         assert rgb.ndim == 4 and rgb.shape[1] == 3
-        assert rgb.shape == depth_cond.shape
         B, _, H, W = rgb.shape
 
         null_emb = self.null_emb.repeat(B, 1, 1)
@@ -99,27 +95,11 @@ class ControlNetDIFT(nn.Module):
             self._feature_cache.clear()
             noisy_latent = self._to_noisy_latent(rgb, seed=seed)
 
-            # ControlNet produces residuals that steer the U-Net toward the depth geometry
-            if not skip_controlnet:
-                down_block_res, mid_block_res = self.controlnet(
-                    noisy_latent,
-                    self.timestep,
-                    encoder_hidden_states=null_emb,
-                    controlnet_cond=depth_cond,
-                    conditioning_scale=1.0,
-                    return_dict=False,
-                )
-            else:
-                down_block_res = None
-                mid_block_res = None
-
             # U-Net forward; hooks populate _feature_cache as side effect
             self.unet(
                 noisy_latent,
                 self.timestep,
                 encoder_hidden_states=null_emb,
-                down_block_additional_residuals=down_block_res,
-                mid_block_additional_residual=mid_block_res,
             )
 
             # Note: We upsample each block's features to common resolution and concatenate
@@ -141,8 +121,6 @@ class ControlNetDIFT(nn.Module):
 
             # explicitly free everything
             del noisy_latent, block_features, features
-            if not skip_controlnet:
-                del down_block_res, mid_block_res
             self._feature_cache.clear()
             torch.cuda.empty_cache()
 

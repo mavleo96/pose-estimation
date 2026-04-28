@@ -1,4 +1,4 @@
-from .dift import ControlNetDIFT
+from .dift import DIFT
 from .embedding_model import Dinov2EmbeddingModel, Dinov3EmbeddingModel
 from .pca import PCA
 
@@ -12,5 +12,5 @@ __all__ = [
     "Dinov2EmbeddingModel",
     "Dinov3EmbeddingModel",
     "MODEL_MAP",
-    "ControlNetDIFT",
+    "DIFT",
 ]
