@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import torch.nn.functional as F
 from kornia.geometry.conversions import (
     euler_from_quaternion,
     quaternion_from_euler,
@@ -137,6 +138,63 @@ def get_visible_point_projections(points, model, K, T_m2c):
     return point_mapping, pixel_coords
 
 
+def depth_to_normals(depth, K, kernel_size=5, sigma=1.5, edge_threshold=30):
+    """
+    Compute surface normals from a depth map using Gaussian smoothing and Sobel gradients.
+
+    Args:
+        depth:          (..., h, w)  depth map, zeros indicate invalid pixels
+        K:              (..., 3, 3)  camera intrinsic matrix
+        kernel_size:    Gaussian smoothing kernel size (default: 5)
+        sigma:          Gaussian sigma (default: 1.5)
+        edge_threshold: depth gradient magnitude threshold for masking
+                        discontinuities, in same units as depth (default: 30)
+
+    Returns:
+        normals: (..., h, w, 3) unit normals in camera space,
+                 zero at invalid or edge pixels
+    """
+
+    *batch, h, w = depth.shape
+    depth = depth.reshape(-1, h, w)
+    K = K.reshape(-1, 3, 3)
+    b = depth.shape[0]
+
+    fx = K[:, 0, 0].view(b, 1, 1)
+    fy = K[:, 1, 1].view(b, 1, 1)
+
+    # gaussian kernel
+    k = torch.arange(-(kernel_size // 2), kernel_size // 2 + 1, device=depth.device).float()
+    g = torch.exp(-(k**2) / (2 * sigma**2))
+    gauss = g.unsqueeze(0) * g.unsqueeze(1)
+    gauss = (gauss / gauss.sum()).view(1, 1, kernel_size, kernel_size)
+
+    # valid-aware smooth
+    valid = (depth > 0).float().unsqueeze(1)
+    d = depth.unsqueeze(1) * valid
+    pad = kernel_size // 2
+    d = F.conv2d(d, gauss, padding=pad) / F.conv2d(valid, gauss, padding=pad).clamp(1e-8)
+
+    # sobel
+    sobel_x = (
+        torch.tensor(
+            [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32, device=depth.device
+        ).view(1, 1, 3, 3)
+        / 8.0
+    )
+    dz_du = F.conv2d(d, sobel_x, padding=1).squeeze(1)
+    dz_dv = F.conv2d(d, sobel_x.transpose(-1, -2), padding=1).squeeze(1)
+    z = d.squeeze(1)
+
+    # normals + mask
+    normals = F.normalize(
+        torch.stack([-z * dz_du / fx, -z * dz_dv / fy, z * z / (fx * fy)], dim=-1), dim=-1, eps=1e-8
+    )
+    mask = ((dz_du**2 + dz_dv**2).sqrt() < edge_threshold) & (depth > 0)
+
+    return (normals * mask.unsqueeze(-1)).reshape(*batch, h, w, 3)
+
+
 __all__ = [
     "euler_to_rotation_matrix",
     "rotation_matrix_to_euler",
@@ -144,6 +202,7 @@ __all__ = [
     "backproject_points",
     "apply_inverse_transform",
     "get_visible_point_projections",
+    "depth_to_normals",
 ]
 
 if __name__ == "__main__":

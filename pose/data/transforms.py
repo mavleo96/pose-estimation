@@ -17,8 +17,15 @@ sd_transform = transforms.Compose(
     ]
 )
 
+array_to_tensor_transform = transforms.Compose(
+    [
+        transforms.ToPILImage(),  # numpy HWC → PIL
+        transforms.PILToTensor(),  # PIL → CHW uint8 [0,255]
+    ]
+)
 
-def load_sonata_deterministic_transform(grid_size=0.02):
+
+def load_sonata_deterministic_transform(grid_size=0.02, coord_scale=0.01):
     config = [
         dict(type="CenterShift", apply_z=True),
         dict(
@@ -42,6 +49,7 @@ def load_sonata_deterministic_transform(grid_size=0.02):
 
     def wrapper(data_dict, seed=0):
         np.random.seed(seed)
+        data_dict["coord"] *= coord_scale
         return transform(data_dict)
 
     return wrapper

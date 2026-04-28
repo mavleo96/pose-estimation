@@ -41,6 +41,7 @@ class SonataEncoderModel(nn.Module):
 
     def forward(self, point):
         B = point["offset"].shape[0]
+        assert B == 1
 
         out = self.model(point)
 
@@ -55,9 +56,11 @@ class SonataEncoderModel(nn.Module):
             parent.feat = out.feat[inverse]
             out = parent
 
-        # We map the local inverse to the global inverse using the offset
-        offset = out.offset
-        vox_starts = torch.tensor([0, *offset.tolist()[:-1]], device=offset.device)
-        global_inv = (out.inverse.reshape(B, -1) + vox_starts[:, None]).reshape(-1)
+        return out.feat[out.inverse].reshape(1, -1, self.dim)
 
-        return out.feat[global_inv].reshape(B, -1, self.dim)
+        # # We map the local inverse to the global inverse using the offset
+        # offset = out.offset
+        # vox_starts = torch.tensor([0, *offset.tolist()[:-1]], device=offset.device)
+        # global_inv = (out.inverse.reshape(B, -1) + vox_starts[:, None]).reshape(-1)
+
+        # return out.feat[global_inv].reshape(B, -1, self.dim)
