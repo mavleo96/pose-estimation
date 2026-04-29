@@ -8,7 +8,7 @@ from diffusers import AutoencoderKL, DDPMScheduler, UNet2DConditionModel
 _MODEL_DIR = Path(__file__).parent
 
 
-class DIFT(nn.Module):
+class DIFTModel(nn.Module):
     """
     Canonical DIFT model.
     """
@@ -18,10 +18,11 @@ class DIFT(nn.Module):
     # stride = 8
     feat_size = (32, 32)
 
-    def __init__(self, up_block_indices: tuple[int, ...], timestep: int):
+    def __init__(self, up_block_indices: tuple[int, ...], timestep: int, ensemble_size: int = 4):
         super().__init__()
 
         self.up_block_indices = up_block_indices
+        self.ensemble_size = ensemble_size
 
         self.scheduler = DDPMScheduler.from_pretrained(self.unet_id, subfolder="scheduler")
         self.vae = AutoencoderKL.from_pretrained(self.unet_id, subfolder="vae")
@@ -84,14 +85,14 @@ class DIFT(nn.Module):
         noise = torch.randn(latent.shape, generator=generator, device=self.device, dtype=self.dtype)
         return self.scheduler.add_noise(latent, noise, self.timestep)
 
-    def forward(self, rgb, ensemble_size=1):
+    def forward(self, rgb):
         assert rgb.ndim == 4 and rgb.shape[1] == 3
         B, _, H, W = rgb.shape
 
         null_emb = self.null_emb.repeat(B, 1, 1)
         feature_agg = None
 
-        for seed in range(ensemble_size):
+        for seed in range(self.ensemble_size):
             self._feature_cache.clear()
             noisy_latent = self._to_noisy_latent(rgb, seed=seed)
 
@@ -124,4 +125,4 @@ class DIFT(nn.Module):
             self._feature_cache.clear()
             torch.cuda.empty_cache()
 
-        return feature_agg / ensemble_size
+        return feature_agg / self.ensemble_size

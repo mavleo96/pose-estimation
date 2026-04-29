@@ -1,4 +1,4 @@
-from .dift import DIFT
+from .dift import DIFTModel
 from .embedding_model import Dinov2EmbeddingModel, Dinov3EmbeddingModel
 from .pca import PCA
 
@@ -8,9 +8,9 @@ MODEL_MAP = {
 }
 
 __all__ = [
-    "PCA",
+    "DIFTModel",
     "Dinov2EmbeddingModel",
     "Dinov3EmbeddingModel",
+    "PCA",
     "MODEL_MAP",
-    "DIFT",
 ]

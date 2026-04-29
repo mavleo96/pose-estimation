@@ -28,10 +28,11 @@ class Dinov2EmbeddingModel(nn.Module):
         output = self.model(x)
 
         # Note: first 5 tokens are for the CLS + registers hence we skip them
-        return {
-            "pooler_output": output.pooler_output,
-            "patch_embeddings": output.last_hidden_state[:, 1 + self.num_registers :, :],
-        }
+        # return {
+        #     "pooler_output": output.pooler_output,
+        #     "patch_embeddings": output.last_hidden_state[:, 1 + self.num_registers :, :],
+        # }
+        return output.last_hidden_state[:, 1 + self.num_registers :, :]
 
 
 class Dinov3EmbeddingModel(nn.Module):
@@ -58,7 +59,8 @@ class Dinov3EmbeddingModel(nn.Module):
         output = self.model(x)
 
         # Note: first 5 tokens are for the CLS + registers hence we skip them
-        return {
-            "pooler_output": output.pooler_output,
-            "patch_embeddings": output.last_hidden_state[:, 1 + self.num_registers :, :],
-        }
+        # return {
+        #     "pooler_output": output.pooler_output,
+        #     "patch_embeddings": output.last_hidden_state[:, 1 + self.num_registers :, :],
+        # }
+        return output.last_hidden_state[:, 1 + self.num_registers :, :]
