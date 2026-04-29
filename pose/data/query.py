@@ -6,7 +6,6 @@ import torch
 from PIL import Image
 from torch.utils.data import Dataset
 
-from .transforms import imagenet_transform
 from .utils import process_rgb_and_depth, rle_to_mask
 
 
@@ -19,6 +18,7 @@ class QueryDataset(Dataset):
         output_size,
         split="test",
         rgb_transform=None,
+        rgb2_transform=None,
     ):
         super().__init__()
         self.dataset_name = dataset_name
@@ -33,7 +33,8 @@ class QueryDataset(Dataset):
         self.image_info = self.load_image_info()
         self.detections = self.load_detections()
 
-        self.rgb_transform = rgb_transform or imagenet_transform
+        self.rgb_transform = rgb_transform
+        self.rgb2_transform = rgb2_transform
 
     def load_image_info(self):
         image_info = {}
@@ -116,6 +117,7 @@ class QueryDataset(Dataset):
             "detection_score": record["score"],
             "detection_time": record["time"],
             "rgb": self.rgb_transform(rgb_query),
+            "rgb2": self.rgb2_transform(rgb_query),
             "depth": torch.from_numpy(depth_query),  # Note: depth is not yet normalized
             "mask": torch.from_numpy(mask_query).bool(),
             "M": torch.from_numpy(M).float(),

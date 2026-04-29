@@ -36,6 +36,7 @@ class QueryDataCollator:
             "obj_id": [item["obj_id"] for item in batch],
             "instance_id": [item["instance_id"] for item in batch],
             "rgb": torch.stack([item["rgb"] for item in batch]),
+            "rgb2": torch.stack([item["rgb2"] for item in batch]),
             "depth": torch.stack([item["depth"] for item in batch]),
             "mask": torch.stack([item["mask"] for item in batch]),
             "M": torch.stack([item["M"] for item in batch]),
