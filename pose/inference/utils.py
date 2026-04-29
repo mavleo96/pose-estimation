@@ -20,6 +20,7 @@ def precompute_embeddings(
     model_wrapper,
     batch_size,
     embeddings_dir,
+    embedding_prefix,
     output_size,
     depth_scale,
     num_workers=4,
@@ -35,6 +36,7 @@ def precompute_embeddings(
         model_wrapper : callable    — function that takes a batch and returns patch embeddings
         batch_size    : int         — number of template views per forward pass
         embeddings_dir: str | Path  — output directory for embeddings and templates
+        embedding_prefix: str       — prefix for the embedding filename
         output_size   : tuple[int]  — (H, W) output size for template images
         depth_scale   : float       — depth scale to convert raw uint16 depth to mm
         num_workers   : int         — number of DataLoader workers. Default: 4.
@@ -42,8 +44,8 @@ def precompute_embeddings(
                         If None, uses imagenet_transform. Default: None.
 
     Saves:
-        embeddings_dir/image_embeddings.npy     — (N_objects, N_views, N_patches, D) float32
-        embeddings_dir/templates.npz      — M, rgb, depth arrays
+        embeddings_dir/{prefix}_image_embeddings.npy — (N_objects, N_views, N_patches, D) float32
+        embeddings_dir/{prefix}_templates.npz      — M, rgb, depth arrays
     """
     embeddings_dir = Path(embeddings_dir)
     embeddings_dir.mkdir(parents=True, exist_ok=True)
@@ -99,18 +101,21 @@ def precompute_embeddings(
     depth = np.stack(depth_list, axis=0)
     mask = np.stack(mask_list, axis=0)
 
-    np.save(embeddings_dir / "image_embeddings.npy", embeddings)
-    np.savez(embeddings_dir / "templates.npz", M=M, rgb=rgb, depth=depth, mask=mask)
+    np.save(embeddings_dir / f"{embedding_prefix}_image_embeddings.npy", embeddings)
+    np.savez(
+        embeddings_dir / f"{embedding_prefix}_templates.npz", M=M, rgb=rgb, depth=depth, mask=mask
+    )
 
 
-def precompute_pca(embeddings_dir, pca, patch_size):
+def precompute_pca(embeddings_dir, embedding_prefix, pca, patch_size):
     """
     Fit PCA on precomputed embeddings and save projected embeddings to disk.
 
     Requires precompute_embeddings to have been run first.
 
     Args:
-        embeddings_dir: str | Path  — directory containing image_embeddings.npy
+        embeddings_dir: str | Path  — directory containing {prefix}_image_embeddings.npy
+        embedding_prefix: str       — prefix for the embedding filename
         pca           : PCA         — unfitted PCA module (nn.Module with fit/forward)
         patch_size    : int         — patch size used to downsample the masks
 
@@ -120,8 +125,10 @@ def precompute_pca(embeddings_dir, pca, patch_size):
     """
     embeddings_dir = Path(embeddings_dir)
 
-    embeddings = torch.from_numpy(np.load(embeddings_dir / "image_embeddings.npy")).float()
-    with np.load(embeddings_dir / "templates.npz") as templates:
+    embeddings = torch.from_numpy(
+        np.load(embeddings_dir / f"{embedding_prefix}_image_embeddings.npy")
+    ).float()
+    with np.load(embeddings_dir / f"{embedding_prefix}_templates.npz") as templates:
         mask = torch.from_numpy(templates["mask"])
         mask = sample_patch_centers(mask, patch_size).flatten(-2)
 
@@ -134,8 +141,8 @@ def precompute_pca(embeddings_dir, pca, patch_size):
 
     pca_embeddings = np.stack(pca_embeddings_list, axis=0)
 
-    np.save(embeddings_dir / "pca_embeddings.npy", pca_embeddings)
-    torch.save(pca.state_dict(), embeddings_dir / "pca.pt")
+    np.save(embeddings_dir / f"{embedding_prefix}_pca_embeddings.npy", pca_embeddings)
+    torch.save(pca.state_dict(), embeddings_dir / f"{embedding_prefix}_pca.pt")
 
 
 # def precompute_pca2(embeddings_dir, pca):
@@ -176,6 +183,7 @@ def precompute_point_embeddings(
     patch_size,
     num_points=1000,
     use_interpolate_embeddings_conv=False,
+    template_prefix="dino",
 ):
     """
     Precompute point embeddings for each object and save to disk.
@@ -192,6 +200,8 @@ def precompute_point_embeddings(
         num_points: int           — number of points to sample from the object mesh
         use_interpolate_embeddings_conv: bool — whether to use interpolate_embeddings_conv
                                 instead of interpolate_embeddings. Default: False.
+        template_prefix: str       — prefix for the template embeddings filename
+
     Saves:
         embeddings_dir/points.npy    — (N_objects, N_points, 3) float32
         embeddings_dir/point_embeddings.npy — (N_objects, N_points, D) float32
@@ -203,7 +213,7 @@ def precompute_point_embeddings(
     _, T, _, D = template_embeddings.shape
 
     # create camera intrinsics adjusted for template resize
-    with np.load(embeddings_dir / "templates.npz") as templates:
+    with np.load(embeddings_dir / f"{template_prefix}_templates.npz") as templates:
         template_M = templates["M"]
     K_adj = template_M @ K
 
@@ -257,6 +267,20 @@ def precompute_point_embeddings(
 
     np.save(embeddings_dir / "points.npy", points)
     np.save(embeddings_dir / "point_embeddings.npy", point_embeddings)
+
+
+def combine_embeddings(alpha, embeddings_dir, prefix1, prefix2):
+    embeddings_dir = Path(embeddings_dir)
+
+    embeddings1 = np.load(embeddings_dir / f"{prefix1}_pca_embeddings.npy")
+    embeddings2 = np.load(embeddings_dir / f"{prefix2}_pca_embeddings.npy")
+
+    embeddings1 = embeddings1 / np.linalg.norm(embeddings1, axis=-1, keepdims=True)
+    embeddings2 = embeddings2 / np.linalg.norm(embeddings2, axis=-1, keepdims=True)
+
+    combined_embeddings = np.concatenate([alpha * embeddings1, (1 - alpha) * embeddings2], axis=-1)
+
+    np.save(embeddings_dir / "pca_embeddings.npy", combined_embeddings)
 
 
 # def precompute_geometric_embeddings(
