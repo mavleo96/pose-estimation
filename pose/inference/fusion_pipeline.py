@@ -1,0 +1,411 @@
+import argparse
+import json
+import logging
+import math
+import shutil
+import time
+from pathlib import Path
+
+import numpy as np
+import torch
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
+from torchvision import transforms
+from tqdm import tqdm
+
+from _configs.constants import DATA_DIR
+
+from ..data import ImageGroupedBatchSampler, ObjectPointDataset, QueryDataCollator, QueryDataset
+from ..data.transforms import imagenet_transform, sd_transform
+from ..matching import PointCorrespondenceFinder
+from ..model import MODEL_MAP, PCA, DIFTModel
+from ..pose_recovery import KabschPoseEstimator
+from ..rendering import TemplateRenderer
+from ..utils.geometry import backproject_points
+from ..utils.image import sample_pixels_from_masks
+from ..utils.io import save_bop_results_from_predictions
+from ..utils.operations import interpolate_embeddings
+from .utils import (
+    combine_embeddings,
+    precompute_embeddings,
+    precompute_pca,
+    precompute_point_embeddings,
+)
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+
+def fusion_embeddings(embeddings_dino, embeddings_dift, alpha):
+    embedding_dino = F.normalize(embeddings_dino, dim=-1)
+    embedding_dift = F.normalize(embeddings_dift, dim=-1)
+    return torch.concat([alpha * embedding_dino, (1 - alpha) * embedding_dift], dim=-1)
+
+
+def fusion_pipeline(
+    dataset_name: str,
+    detections_path: Path,
+    results_dir: Path,
+    device: torch.device,
+    dtype: torch.dtype = torch.bfloat16,
+    batch_size: int = 4,
+    feat_size: tuple[int, int] = (32, 32),
+    alpha: float = 0.5,
+    n_src_points: int = 5000,
+    n_tar_points: int = 1000,
+    dino_model_type: str = "dinov2",
+    dino_output_size: tuple[int, int] = (448, 448),
+    dino_batch_size: int = 20,
+    dift_output_size: tuple[int, int] = (512, 512),
+    dift_batch_size: int = 4,
+    up_block_indices: tuple[int, ...] = (1, 2),
+    timestep: int = 50,
+    ensemble_size: int = 4,
+    sim_threshold: float = 0.0,
+    render_templates: bool = True,
+) -> None:
+    data_root = Path(DATA_DIR)
+    embeddings_dir = results_dir / "embeddings"
+    embeddings_dir.mkdir(parents=True, exist_ok=True)
+    pred_dir = results_dir / "predictions"
+    pred_dir.mkdir(parents=True, exist_ok=True)
+
+    # ----------------------------- ONBOARDING -----------------------------
+    onboarding_start = time.time()
+
+    # Render templates
+    renderer = TemplateRenderer(dataset_name, data_root)
+    if render_templates:
+        logger.info("Rendering templates...")
+        renderer.render_templates()
+    else:
+        logger.info("Using existing templates...")
+
+    # Load embedding model and PCA
+    logger.info("Loading embedding model and PCA...")
+    dino_model = MODEL_MAP[dino_model_type]()
+    dift_model = DIFTModel(
+        up_block_indices=up_block_indices, timestep=timestep, ensemble_size=ensemble_size
+    )
+    dino_pca = PCA(d=dino_model.dim, n_components=256)
+    dift_pca = PCA(d=dift_model.dim, n_components=256)
+    dino_model.to(device, dtype)
+    dift_model.to(device, dtype)
+    dino_pca.to(device, dtype)
+    dift_pca.to(device, dtype)
+
+    assert (
+        dino_output_size[0] // dino_model.patch_size == feat_size[0]
+        and dino_output_size[1] // dino_model.patch_size == feat_size[1]
+    )
+    assert dift_model.feat_size == feat_size
+
+    # Note: this is flaky, but it works for now
+    dift_stride = dift_output_size[0] // feat_size[0]
+
+    # Precompute DINO embeddings and PCA
+    def dino_model_wrapper(batch):
+        with torch.no_grad():
+            rgb = batch["rgb"].to(device, dtype)
+            out = dino_model(rgb)
+        return out
+
+    logger.info("Precomputing DINO embeddings...")
+    precompute_embeddings(
+        dataset_name=dataset_name,
+        data_dir=data_root,
+        obj_ids=renderer.obj_ids,
+        model_wrapper=dino_model_wrapper,
+        batch_size=dino_batch_size,
+        embeddings_dir=embeddings_dir,
+        embedding_prefix="dino",
+        output_size=dino_output_size,
+        depth_scale=renderer.camera.depth_scale,
+        rgb_transform=imagenet_transform,
+    )
+    logger.info("Precomputing DIFT embeddings...")
+    precompute_pca(
+        embeddings_dir=embeddings_dir,
+        embedding_prefix="dino",
+        pca=dino_pca,
+        patch_size=dino_model.patch_size,
+    )
+
+    # Precompute DIFT embeddings and PCA
+    def dift_model_wrapper(batch):
+        with torch.no_grad():
+            rgb = batch["rgb"].to(device, dtype)
+            out = dift_model(rgb)
+        return out.flatten(start_dim=-2).permute(0, 2, 1)
+
+    logger.info("Precomputing DIFT embeddings...")
+    precompute_embeddings(
+        dataset_name=dataset_name,
+        data_dir=data_root,
+        obj_ids=renderer.obj_ids,
+        model_wrapper=dift_model_wrapper,
+        batch_size=dift_batch_size,
+        embeddings_dir=embeddings_dir,
+        embedding_prefix="dift",
+        output_size=dift_output_size,
+        depth_scale=renderer.camera.depth_scale,
+        rgb_transform=sd_transform,
+    )
+    logger.info("Precomputing DIFT PCA...")
+    precompute_pca(
+        embeddings_dir=embeddings_dir, embedding_prefix="dift", pca=dift_pca, patch_size=dift_stride
+    )
+    logger.info("Combining DINO and DIFT embeddings...")
+    combine_embeddings(alpha, embeddings_dir, "dino", "dift")
+
+    logger.info("Precomputing point embeddings...")
+    precompute_point_embeddings(
+        dataset_name=dataset_name,
+        data_dir=data_root,
+        embeddings_dir=embeddings_dir,
+        obj_ids=renderer.obj_ids,
+        K=renderer.camera.K,
+        image_size=dino_output_size,
+        patch_size=dino_model.patch_size,
+        num_points=n_src_points,
+        template_prefix="dino",
+    )
+
+    # dino_pca.load_state_dict(torch.load(embeddings_dir / "dino_pca.pt"))
+    # dift_pca.load_state_dict(torch.load(embeddings_dir / "dift_pca.pt"))
+
+    onboarding_time = time.time() - onboarding_start
+    logger.info(
+        f"Time taken: {onboarding_time:.2f} seconds;"
+        f" {onboarding_time / len(renderer.obj_ids):.2f} seconds per object"
+    )
+
+    with open(results_dir / "onboarding.json", "w") as f:
+        json.dump(
+            {
+                "onboarding_time": onboarding_time,
+                "onboarding_time_per_object": onboarding_time / len(renderer.obj_ids),
+            },
+            f,
+            indent=4,
+        )
+
+    # ----------------------------- INFERENCE -----------------------------
+
+    sd_transform2 = transforms.Compose(
+        [
+            transforms.ToPILImage(),
+            transforms.Resize(dift_output_size),
+            sd_transform,
+        ]
+    )
+
+    # Compute inlier threshold as 10% of the average diameter
+    avg_diameter = np.mean([v["diameter"] for k, v in renderer.models_info.items()])
+    inlier_thresh = math.ceil(avg_diameter / 100) * 10
+    logger.info(f"Average diameter: {avg_diameter:.2f}mm, Inlier threshold: {inlier_thresh:.2f}mm")
+
+    # Initialize matcher and pose estimator
+    logger.info("Initializing matcher and pose estimator...")
+    assert sim_threshold == 0.0
+    matcher = PointCorrespondenceFinder(sim_threshold=sim_threshold)
+    pose_estimator = KabschPoseEstimator(inlier_thresh=inlier_thresh)
+    logger.info(matcher)
+    logger.info(pose_estimator)
+
+    # Load template and query datasets
+    logger.info("Loading template and query datasets...")
+    object_dataset = ObjectPointDataset(
+        dataset_name, data_root, embeddings_dir, "point_embeddings.npy"
+    )
+    query_dataset = QueryDataset(
+        dataset_name,
+        data_root,
+        detections_path,
+        dino_output_size,
+        "test",
+        rgb_transform=imagenet_transform,
+        rgb2_transform=sd_transform2,
+    )
+
+    sampler = ImageGroupedBatchSampler(query_dataset, batch_size=batch_size)
+    collator = QueryDataCollator()
+    dataloader = DataLoader(query_dataset, batch_sampler=sampler, collate_fn=collator)
+
+    # Run inference loop
+    logger.info("Running inference loop...")
+    results_dict = {}
+    inference_start = time.time()
+    for batch in tqdm(dataloader, desc="Estimating poses...", total=len(dataloader)):
+        time_start = time.time()
+        B = len(batch["obj_id"])
+        batch_idx = torch.arange(B, device=device)[:, None]
+
+        # Get object data using obj_id detected
+        item = object_dataset[object_dataset.get_index(batch["obj_id"])]
+        object_points = item["points"].to(device)
+        object_embeddings = item["embedding"].to(device, dtype)
+
+        # Get query data
+        query_rgb = batch["rgb"].to(device, dtype)
+        query_rgb2 = batch["rgb2"].to(device, dtype)
+        query_mask = batch["mask"].to(device)
+        query_depth = batch["depth"].to(device)
+        query_M = batch["M"].to(device)
+        query_cam_K = batch["cam_K"].to(device)
+
+        # Compute query embeddings
+        with torch.no_grad():
+            query_embeddings_dino = dino_model(query_rgb)
+            query_embeddings_dino = dino_pca(query_embeddings_dino)
+
+            query_embeddings_dift = dift_model(query_rgb2).flatten(start_dim=-2).permute(0, 2, 1)
+            query_embeddings_dift = dift_pca(query_embeddings_dift)
+
+            query_embeddings = fusion_embeddings(
+                query_embeddings_dino, query_embeddings_dift, alpha
+            )
+
+        del query_rgb
+
+        # Sample query points
+        query_pts2d, query_pts2d_mask = sample_pixels_from_masks(query_mask, n_tar_points)
+        query_pts2d_depth = query_depth[batch_idx, query_pts2d[:, :, 1], query_pts2d[:, :, 0]]
+        query_pts3d = backproject_points(
+            query_pts2d.float(), query_pts2d_depth, query_M @ query_cam_K
+        )
+
+        # Compute query point embeddings
+        query_point_embeddings = torch.zeros((B, n_tar_points, query_embeddings.shape[-1])).to(
+            device, dtype
+        )
+        for i in range(B):
+            query_point_embeddings[i] = interpolate_embeddings(
+                query_embeddings[i], query_pts2d[i], dino_model.patch_size, dino_output_size
+            )
+
+        # Find point correspondences
+        matches = matcher(query_point_embeddings, object_embeddings, query_pts2d_mask)
+        src_pts3d = object_points[batch_idx, matches["idx_tar2src"]]
+
+        del query_embeddings, query_point_embeddings, query_mask
+
+        # Estimate pose
+        R_est, t_est, _ = pose_estimator.estimate_pose(src_pts3d, query_pts3d, matches["mask"])
+        R_est = R_est.cpu().numpy()
+        t_est = t_est.cpu().numpy()
+
+        time_taken = time.time() - time_start
+
+        image_key = f"{batch['scene_id']:06d}_{batch['im_id']:06d}"
+        if image_key not in results_dict:
+            results_dict[image_key] = {
+                "scene_id": batch["scene_id"],
+                "im_id": batch["im_id"],
+                "detection_time": np.mean(batch["detection_time"]),
+                "results": {
+                    "obj_id": [],
+                    "detection_score": [],
+                    "R": [],
+                    "t": [],
+                    "pose_estimation_time": [],
+                },
+            }
+        results_dict[image_key]["results"]["obj_id"].extend(batch["obj_id"])
+        results_dict[image_key]["results"]["R"].extend([R_est[i] for i in range(B)])
+        results_dict[image_key]["results"]["t"].extend([t_est[i] for i in range(B)])
+        results_dict[image_key]["results"]["detection_score"].extend(batch["detection_score"])
+        results_dict[image_key]["results"]["pose_estimation_time"].extend([time_taken / B] * B)
+
+    inference_time = time.time() - inference_start
+    logger.info(
+        f"Inference time: {inference_time:.2f} seconds;"
+        f" {inference_time / len(query_dataset.image_info):.2f} seconds per image"
+    )
+
+    # ----------------------------- SAVING -----------------------------
+
+    # Clean up
+    shutil.rmtree(embeddings_dir)
+
+    # Save predictions
+    logger.info("Saving predictions...")
+    for image_key, result in results_dict.items():
+        np.savez(pred_dir / f"{image_key}.npz", **result)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser("Fusion pipeline")
+    parser.add_argument("--run_name", type=str, required=True)
+    parser.add_argument("--dataset_name", type=str, required=True)
+    parser.add_argument("--split", type=str, default="test")
+    parser.add_argument("--detections_path", type=str, required=True)
+    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument("--dtype", type=str, default="bfloat16")
+    parser.add_argument("--batch_size", type=int, default=4)
+    parser.add_argument("--feat_size", type=int, nargs=2, default=[32, 32])
+    parser.add_argument("--alpha", type=float, default=0.5)
+    parser.add_argument("--n_src_points", type=int, default=5000)
+    parser.add_argument("--n_tar_points", type=int, default=1000)
+    parser.add_argument("--dino_model_type", type=str, default="dinov2")
+    parser.add_argument("--dino_output_size", type=int, nargs=2, default=[448, 448])
+    parser.add_argument("--dino_batch_size", type=int, default=20)
+    parser.add_argument("--dift_output_size", type=int, nargs=2, default=[512, 512])
+    parser.add_argument("--dift_batch_size", type=int, default=4)
+    parser.add_argument("--up_block_indices", type=int, nargs="+", default=[1, 2])
+    parser.add_argument("--timestep", type=int, default=50)
+    parser.add_argument("--ensemble_size", type=int, default=4)
+    parser.add_argument("--sim_threshold", type=float, default=0.0)
+    parser.add_argument("--render_templates", action="store_true")
+    args = parser.parse_args()
+
+    # Paths
+    detections_path = Path(args.detections_path)
+    results_dir = Path(DATA_DIR) / "results" / args.run_name
+    results_dir.mkdir(parents=True, exist_ok=True)
+
+    # Args
+    # output_size = tuple(args.dino_output_size)
+    device = torch.device(args.device)
+    dtype = getattr(torch, args.dtype)
+
+    # Save args in a json file
+    with open(results_dir / "args.json", "w") as f:
+        json.dump(args.__dict__, f, indent=4)
+
+    # Run Fusion pipeline
+    fusion_pipeline(
+        dataset_name=args.dataset_name,
+        detections_path=detections_path,
+        results_dir=results_dir,
+        device=device,
+        dtype=dtype,
+        batch_size=args.batch_size,
+        feat_size=tuple(args.feat_size),
+        alpha=args.alpha,
+        n_src_points=args.n_src_points,
+        n_tar_points=args.n_tar_points,
+        dino_model_type=args.dino_model_type,
+        dino_output_size=tuple(args.dino_output_size),
+        dino_batch_size=args.dino_batch_size,
+        dift_output_size=tuple(args.dift_output_size),
+        dift_batch_size=args.dift_batch_size,
+        up_block_indices=tuple(args.up_block_indices),
+        timestep=args.timestep,
+        ensemble_size=args.ensemble_size,
+        sim_threshold=args.sim_threshold,
+        render_templates=args.render_templates,
+    )
+
+    # Save predictions in BOP format
+    save_bop_results_from_predictions(
+        method_name=args.run_name,
+        dataset_name=args.dataset_name,
+        split=args.split,
+        save_dir=results_dir,
+        predictions_dir=results_dir / "predictions",
+    )
+
+
+if __name__ == "__main__":
+    main()
