@@ -86,6 +86,29 @@ python -m pose.inference.sonata_pipeline \
     --grid_size 0.01 \
     --coord_scale 0.01 \
     --enc_patch_size 128
+
+python -m pose.inference.fusion_pipeline \
+    --run_name lmo-fusion-kabsch-0.5- \
+    --dataset_name lmo \
+    --detections_path /data/pose-estimation/bop_extra/default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_lmo-test_3cb298ea-e2eb-4713-ae9e-5a7134c5da0f.json \
+    --device cuda \
+    --dtype bfloat16 \
+    --batch_size 4 \
+    --feat_size 32 32 \
+    --alpha 0.5 \
+    --n_src_points 5000 \
+    --n_tar_points 1000 \
+    --dino_model_type dinov2 \
+    --dino_output_size 448 448 \
+    --dino_batch_size 20 \
+    --dift_output_size 512 512 \
+    --dift_batch_size 4 \
+    --up_block_indices 1 2 \
+    --timestep 50 \
+    --ensemble_size 4 \
+    --sim_threshold 0.0 \
+    --render_templates
+
 ```
 
 ## BOP Evaluation
