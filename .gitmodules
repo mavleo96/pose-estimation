@@ -1,6 +1,3 @@
 [submodule "bop_toolkit"]
 	path = bop_toolkit
 	url = git@github.com:mavleo96/bop_toolkit.git
-[submodule "sonata"]
-	path = sonata
-	url = git@github.com:mavleo96/sonata.git
