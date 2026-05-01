@@ -105,8 +105,7 @@ def fusion_pipeline(
 
     # Compute feature and output size
     # Note: this is flaky, but it works for now
-    dift_stride = 8
-    dift_output_size = (feat_size[0] * dift_stride, feat_size[1] * dift_stride)
+    dift_output_size = (feat_size[0] * dift_model.stride, feat_size[1] * dift_model.stride)
 
     # Precompute DINO embeddings and PCA
     def dino_model_wrapper(batch):
@@ -160,7 +159,10 @@ def fusion_pipeline(
     )
     logger.info("Precomputing DIFT PCA...")
     precompute_pca(
-        embeddings_dir=embeddings_dir, embedding_prefix="dift", pca=dift_pca, patch_size=dift_stride
+        embeddings_dir=embeddings_dir,
+        embedding_prefix="dift",
+        pca=dift_pca,
+        patch_size=dift_model.stride,
     )
     logger.info("Combining DINO and DIFT embeddings...")
     combine_embeddings(alpha, embeddings_dir, "dino", "dift")

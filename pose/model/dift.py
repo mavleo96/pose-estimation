@@ -15,8 +15,7 @@ class DIFTModel(nn.Module):
 
     unet_id = "runwayml/stable-diffusion-v1-5"
 
-    # stride = 8
-    # feat_size = (32, 32)
+    stride = 8
 
     def __init__(
         self,
@@ -133,3 +132,130 @@ class DIFTModel(nn.Module):
             torch.cuda.empty_cache()
 
         return feature_agg / self.ensemble_size
+
+
+class DIFTModelV2(nn.Module):
+    """
+    DIFT model with variable timesteps aggregation.
+    """
+
+    unet_id = "runwayml/stable-diffusion-v1-5"
+
+    stride = 8
+
+    def __init__(
+        self,
+        up_block_indices: tuple[int, ...],
+        feat_size: tuple[int, int] = (16, 16),
+    ):
+        super().__init__()
+
+        self.up_block_indices = up_block_indices
+        self.feat_size = feat_size
+
+        self.scheduler = DDPMScheduler.from_pretrained(self.unet_id, subfolder="scheduler")
+        self.vae = AutoencoderKL.from_pretrained(self.unet_id, subfolder="vae")
+        self.unet = UNet2DConditionModel.from_pretrained(self.unet_id, subfolder="unet")
+
+        self.register_buffer("null_emb", torch.load(_MODEL_DIR / "null_emb.pt", weights_only=True))
+
+        timesteps = [250, 217, 184, 150, 117, 83, 50, 17, 0]  # ~T/4 to 0
+        self.register_buffer("timestep", torch.tensor(timesteps))
+        self.register_buffer("weights", torch.linspace(0.1, 1.0, len(timesteps)))
+
+        self._feature_cache = {}
+        self._register_hooks()
+
+    @property
+    def device(self):
+        return self.vae.device
+
+    @property
+    def dtype(self):
+        return self.vae.dtype
+
+    @property
+    def dim(self):
+        num_dims = 0
+        if 0 in self.up_block_indices:
+            num_dims += 1280
+        if 1 in self.up_block_indices:
+            num_dims += 1280
+        if 2 in self.up_block_indices:
+            num_dims += 640
+        if 3 in self.up_block_indices:
+            num_dims += 320
+        return num_dims
+
+    def enable_xformers(self):
+        self.unet.enable_xformers_memory_efficient_attention()
+
+    def _register_hooks(self):
+        for block_idx in self.up_block_indices:
+            tag = f"up_block_{block_idx}"
+
+            def make_hook(key):
+                def hook(module, input, output):
+                    # Note: ResnetBlock2D returns a tensor, CrossAttnUpBlock2D returns a tuple
+                    out = output[0] if isinstance(output, tuple) else output
+                    self._feature_cache[key] = out.detach().clone()
+
+                return hook
+
+            self.unet.up_blocks[block_idx].resnets[-1].register_forward_hook(make_hook(tag))
+
+    def _to_noisy_latent(self, rgb, timestep, seed):
+        # Note: we use the mean of the latent distribution for deterministic output
+        # and avoid stochastic sampling across ensemble seeds
+        latent = self.vae.encode(rgb).latent_dist.mean * self.vae.config.scaling_factor
+        # latent = self.vae.encode(rgb).latent_dist.sample()
+
+        # Note: we use a fixed seed per ensemble member for reproducibility
+        generator = torch.Generator(device=self.device).manual_seed(seed)
+        noise = torch.randn(latent.shape, generator=generator, device=self.device, dtype=self.dtype)
+        return self.scheduler.add_noise(latent, noise, timestep)
+
+    def forward(self, rgb):
+        assert rgb.ndim == 4 and rgb.shape[1] == 3
+        B, _, H, W = rgb.shape
+
+        null_emb = self.null_emb.repeat(B, 1, 1)
+        feature_agg = None
+
+        for i in range(len(self.timestep)):
+            self._feature_cache.clear()
+            # seed = i for reproducibility
+            noisy_latent = self._to_noisy_latent(rgb, self.timestep[i], seed=i)
+
+            # U-Net forward; hooks populate _feature_cache as side effect
+            self.unet(
+                noisy_latent,
+                self.timestep[i],
+                encoder_hidden_states=null_emb,
+            )
+
+            # Note: We upsample each block's features to common resolution and concatenate
+            # Block 0 -> 1280 channels, 8x8    (for 512x512 input)
+            # Block 1 -> 1280 channels, 16x16
+            # Block 2 -> 640 channels,  32x32
+            # Block 3 -> 320 channels,  64x64
+            block_features = [
+                F.interpolate(
+                    self._feature_cache[f"up_block_{block_idx}"],
+                    size=self.feat_size,
+                    mode="bilinear",
+                    align_corners=False,
+                )
+                for block_idx in self.up_block_indices
+            ]
+            features = torch.cat(block_features, dim=1)
+            feature_agg = (
+                features if feature_agg is None else feature_agg + self.weights[i] * features
+            )
+
+            # explicitly free everything
+            del noisy_latent, block_features, features
+            self._feature_cache.clear()
+            torch.cuda.empty_cache()
+
+        return feature_agg
