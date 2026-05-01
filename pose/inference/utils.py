@@ -16,6 +16,7 @@ from ..utils.operations import interpolate_embeddings, interpolate_embeddings_co
 def precompute_embeddings(
     dataset_name,
     data_dir,
+    template_dir,
     obj_ids,
     model_wrapper,
     batch_size,
@@ -32,6 +33,7 @@ def precompute_embeddings(
     Args:
         dataset_name  : str         — BOP dataset name (e.g. "lmo", "ycbv")
         data_dir      : str | Path  — root data directory
+        template_dir  : str | Path  — template directory
         obj_ids       : list[int]   — object ids to precompute embeddings for
         model_wrapper : callable    — function that takes a batch and returns patch embeddings
         batch_size    : int         — number of template views per forward pass
@@ -52,12 +54,12 @@ def precompute_embeddings(
 
     rgb_transform = rgb_transform or imagenet_transform
 
-    templates_path = Path(data_dir) / "templates" / dataset_name
+    templates_path = Path(template_dir) / dataset_name
 
     embeddings_list = []
     M_list = []
-    rgb_list = []
-    depth_list = []
+    # rgb_list = []
+    # depth_list = []
     mask_list = []
 
     for obj_id in obj_ids:
@@ -70,8 +72,8 @@ def precompute_embeddings(
 
         object_embeddings_list = []
         object_M_list = []
-        object_rgb_list = []
-        object_depth_list = []
+        # object_rgb_list = []
+        # object_depth_list = []
         object_mask_list = []
 
         for batch in tqdm(dataloader, desc=f"precomputing embeddings for obj {obj_id:06d}"):
@@ -79,31 +81,33 @@ def precompute_embeddings(
 
             object_embeddings_list.append(patch_embeddings.float().cpu().numpy())
             object_M_list.append(batch["M"].numpy())
-            object_rgb_list.append(batch["rgb"].numpy())
-            object_depth_list.append(batch["depth"].numpy())
+            # object_rgb_list.append(batch["rgb"].numpy())
+            # object_depth_list.append(batch["depth"].numpy())
             object_mask_list.append(batch["mask"].numpy())
 
         object_embeddings = np.concatenate(object_embeddings_list, axis=0)
         object_M = np.concatenate(object_M_list, axis=0)
-        object_rgb = np.concatenate(object_rgb_list, axis=0)
-        object_depth = np.concatenate(object_depth_list, axis=0)
+        # object_rgb = np.concatenate(object_rgb_list, axis=0)
+        # object_depth = np.concatenate(object_depth_list, axis=0)
         object_mask = np.concatenate(object_mask_list, axis=0)
 
         embeddings_list.append(object_embeddings)
         M_list.append(object_M)
-        rgb_list.append(object_rgb)
-        depth_list.append(object_depth)
+        # rgb_list.append(object_rgb)
+        # depth_list.append(object_depth)
         mask_list.append(object_mask)
 
     embeddings = np.stack(embeddings_list, axis=0)
     M = np.stack(M_list, axis=0)
-    rgb = np.stack(rgb_list, axis=0)
-    depth = np.stack(depth_list, axis=0)
+    # rgb = np.stack(rgb_list, axis=0)
+    # depth = np.stack(depth_list, axis=0)
     mask = np.stack(mask_list, axis=0)
 
     np.save(embeddings_dir / f"{embedding_prefix}_image_embeddings.npy", embeddings)
     np.savez(
-        embeddings_dir / f"{embedding_prefix}_templates.npz", M=M, rgb=rgb, depth=depth, mask=mask
+        embeddings_dir / f"{embedding_prefix}_templates.npz",
+        M=M,
+        mask=mask,  # rgb=rgb, depth=depth
     )
 
 
@@ -176,6 +180,7 @@ def precompute_pca(embeddings_dir, embedding_prefix, pca, patch_size):
 def precompute_point_embeddings(
     dataset_name,
     data_dir,
+    template_dir,
     embeddings_dir,
     obj_ids,
     K,
@@ -191,6 +196,7 @@ def precompute_point_embeddings(
     Args:
         dataset_name: str         — BOP dataset name (e.g. "lmo", "ycbv")
         data_dir: str | Path      — root data directory
+        template_dir: str | Path  — template directory
         embeddings_dir: str | Path — directory containing embeddings.npy
         obj_ids: list[int]        — object ids to precompute point embeddings for
         K: np.ndarray             — camera intrinsics
@@ -206,7 +212,7 @@ def precompute_point_embeddings(
         embeddings_dir/points.npy    — (N_objects, N_points, 3) float32
         embeddings_dir/point_embeddings.npy — (N_objects, N_points, D) float32
     """
-    templates_path = Path(data_dir) / "templates" / dataset_name
+    templates_path = Path(template_dir) / dataset_name
     data_path = Path(data_dir) / dataset_name
 
     template_embeddings = torch.from_numpy(np.load(embeddings_dir / "pca_embeddings.npy")).float()
