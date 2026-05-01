@@ -49,14 +49,14 @@ def fusion_pipeline(
     device: torch.device,
     dtype: torch.dtype = torch.bfloat16,
     batch_size: int = 4,
-    feat_size: tuple[int, int] = (32, 32),
+    # feat_size: tuple[int, int] = (32, 32),
     alpha: float = 0.5,
     n_src_points: int = 5000,
     n_tar_points: int = 1000,
     dino_model_type: str = "dinov2",
-    dino_output_size: tuple[int, int] = (448, 448),
+    dino_output_size: tuple[int, int] = (224, 224),
     dino_batch_size: int = 20,
-    dift_output_size: tuple[int, int] = (512, 512),
+    # dift_output_size: tuple[int, int] = (512, 512),
     dift_batch_size: int = 4,
     up_block_indices: tuple[int, ...] = (1, 2),
     timestep: int = 50,
@@ -84,8 +84,17 @@ def fusion_pipeline(
     # Load embedding model and PCA
     logger.info("Loading embedding model and PCA...")
     dino_model = MODEL_MAP[dino_model_type]()
+    assert all(i % dino_model.patch_size == 0 for i in dino_output_size)
+    feat_size = (
+        dino_output_size[0] // dino_model.patch_size,
+        dino_output_size[1] // dino_model.patch_size,
+    )
+
     dift_model = DIFTModel(
-        up_block_indices=up_block_indices, timestep=timestep, ensemble_size=ensemble_size
+        up_block_indices=up_block_indices,
+        timestep=timestep,
+        ensemble_size=ensemble_size,
+        feat_size=feat_size,
     )
     dino_pca = PCA(d=dino_model.dim, n_components=256)
     dift_pca = PCA(d=dift_model.dim, n_components=256)
@@ -94,14 +103,10 @@ def fusion_pipeline(
     dino_pca.to(device, dtype)
     dift_pca.to(device, dtype)
 
-    assert (
-        dino_output_size[0] // dino_model.patch_size == feat_size[0]
-        and dino_output_size[1] // dino_model.patch_size == feat_size[1]
-    )
-    assert dift_model.feat_size == feat_size
-
+    # Compute feature and output size
     # Note: this is flaky, but it works for now
-    dift_stride = dift_output_size[0] // feat_size[0]
+    dift_stride = 8
+    dift_output_size = (feat_size[0] * dift_stride, feat_size[1] * dift_stride)
 
     # Precompute DINO embeddings and PCA
     def dino_model_wrapper(batch):
@@ -114,6 +119,7 @@ def fusion_pipeline(
     precompute_embeddings(
         dataset_name=dataset_name,
         data_dir=data_root,
+        template_dir=data_root / "templates",
         obj_ids=renderer.obj_ids,
         model_wrapper=dino_model_wrapper,
         batch_size=dino_batch_size,
@@ -142,6 +148,7 @@ def fusion_pipeline(
     precompute_embeddings(
         dataset_name=dataset_name,
         data_dir=data_root,
+        template_dir=data_root / "templates",
         obj_ids=renderer.obj_ids,
         model_wrapper=dift_model_wrapper,
         batch_size=dift_batch_size,
@@ -162,6 +169,7 @@ def fusion_pipeline(
     precompute_point_embeddings(
         dataset_name=dataset_name,
         data_dir=data_root,
+        template_dir=data_root / "templates",
         embeddings_dir=embeddings_dir,
         obj_ids=renderer.obj_ids,
         K=renderer.camera.K,
@@ -343,14 +351,14 @@ def main() -> None:
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--dtype", type=str, default="bfloat16")
     parser.add_argument("--batch_size", type=int, default=4)
-    parser.add_argument("--feat_size", type=int, nargs=2, default=[32, 32])
+    # parser.add_argument("--feat_size", type=int, nargs=2, default=[32, 32])
     parser.add_argument("--alpha", type=float, default=0.5)
     parser.add_argument("--n_src_points", type=int, default=5000)
     parser.add_argument("--n_tar_points", type=int, default=1000)
     parser.add_argument("--dino_model_type", type=str, default="dinov2")
-    parser.add_argument("--dino_output_size", type=int, nargs=2, default=[448, 448])
+    parser.add_argument("--dino_output_size", type=int, nargs=2, default=[224, 224])
     parser.add_argument("--dino_batch_size", type=int, default=20)
-    parser.add_argument("--dift_output_size", type=int, nargs=2, default=[512, 512])
+    # parser.add_argument("--dift_output_size", type=int, nargs=2, default=[512, 512])
     parser.add_argument("--dift_batch_size", type=int, default=4)
     parser.add_argument("--up_block_indices", type=int, nargs="+", default=[1, 2])
     parser.add_argument("--timestep", type=int, default=50)
@@ -381,14 +389,14 @@ def main() -> None:
         device=device,
         dtype=dtype,
         batch_size=args.batch_size,
-        feat_size=tuple(args.feat_size),
+        # feat_size=tuple(args.feat_size),
         alpha=args.alpha,
         n_src_points=args.n_src_points,
         n_tar_points=args.n_tar_points,
         dino_model_type=args.dino_model_type,
         dino_output_size=tuple(args.dino_output_size),
         dino_batch_size=args.dino_batch_size,
-        dift_output_size=tuple(args.dift_output_size),
+        # dift_output_size=tuple(args.dift_output_size),
         dift_batch_size=args.dift_batch_size,
         up_block_indices=tuple(args.up_block_indices),
         timestep=args.timestep,

@@ -16,13 +16,20 @@ class DIFTModel(nn.Module):
     unet_id = "runwayml/stable-diffusion-v1-5"
 
     # stride = 8
-    feat_size = (32, 32)
+    # feat_size = (32, 32)
 
-    def __init__(self, up_block_indices: tuple[int, ...], timestep: int, ensemble_size: int = 4):
+    def __init__(
+        self,
+        up_block_indices: tuple[int, ...],
+        timestep: int,
+        ensemble_size: int = 4,
+        feat_size: tuple[int, int] = (16, 16),
+    ):
         super().__init__()
 
         self.up_block_indices = up_block_indices
         self.ensemble_size = ensemble_size
+        self.feat_size = feat_size
 
         self.scheduler = DDPMScheduler.from_pretrained(self.unet_id, subfolder="scheduler")
         self.vae = AutoencoderKL.from_pretrained(self.unet_id, subfolder="vae")
