@@ -17,6 +17,8 @@ def load_camera_intrinsics(dataset_name, data_path):
     if dataset_name == "ycbv":
         # Note: YCBV dataset has two cameras: "uw" and "cmu"
         camera = CameraIntrinsic.from_json(data_path / "camera_uw.json")
+    elif dataset_name in ["tless", "hb"]:
+        camera = CameraIntrinsic.from_json(data_path / "camera_primesense.json")
     else:
         camera = CameraIntrinsic.from_json(data_path / "camera.json")
     return camera
