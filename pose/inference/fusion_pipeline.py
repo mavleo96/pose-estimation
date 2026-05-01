@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from tqdm import tqdm
 
-from _configs.constants import DATA_DIR
+from configs.constants import DATA_DIR
 
 from ..data import ImageGroupedBatchSampler, ObjectPointDataset, QueryDataCollator, QueryDataset
 from ..data.transforms import imagenet_transform, sd_transform
