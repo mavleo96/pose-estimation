@@ -1,4 +1,0 @@
-wandb_api_key: 
-wandb_project_name: gigapose
-local_root_dir: /data/vijay/pose-estimation
-slurm_root_dir: ./data
