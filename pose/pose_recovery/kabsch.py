@@ -222,7 +222,7 @@ if __name__ == "__main__":
     import numpy as np
     import trimesh
 
-    from configs.constants import DATA_DIR
+    from configs import DATA_DIR
 
     from ..utils.geometry import euler_to_rotation_matrix
 

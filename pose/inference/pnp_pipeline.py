@@ -10,7 +10,7 @@
 # from torch.utils.data import DataLoader
 # from tqdm import tqdm
 
-# from configs.constants import DATA_DIR
+# from configs import DATA_DIR
 
 # from ..data import ImageGroupedBatchSampler, QueryDataCollator, QueryDataset, TemplateDataset
 # from ..matching import PatchCorrespondenceFinder

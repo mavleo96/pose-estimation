@@ -10,7 +10,7 @@ sys.path.insert(0, os.getcwd())
 
 from huggingface_hub import snapshot_download
 
-from _configs.constants import BOP_CLASSIC, BOP_H3, BOP_INDUSTRIAL, DATA_DIR
+from configs import BOP_CLASSIC, BOP_H3, BOP_INDUSTRIAL, DATA_DIR
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)

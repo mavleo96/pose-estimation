@@ -193,7 +193,7 @@ if __name__ == "__main__":
     import trimesh
     from trimesh.ray.ray_pyembree import RayMeshIntersector
 
-    from configs.constants import DATA_DIR
+    from configs import DATA_DIR
 
     from ..rendering.render import look_at_matrix
     from ..utils.camera import CameraIntrinsic

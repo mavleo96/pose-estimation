@@ -16,7 +16,7 @@
 # # Suppress SSL verification warnings
 # warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
-# from _configs.constants import DATA_DIR
+# from configs import DATA_DIR
 
 
 # def get_filename_from_url(url: str) -> str:

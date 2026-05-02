@@ -11,7 +11,7 @@
 # from torch.utils.data import DataLoader
 # from tqdm import tqdm
 
-# from configs.constants import DATA_DIR
+# from configs import DATA_DIR
 
 # from ..data import ImageGroupedBatchSampler, ObjectPointDataset, QueryDataCollator, QueryDataset
 # from ..data.transforms import array_to_tensor_transform, load_sonata_deterministic_transform
