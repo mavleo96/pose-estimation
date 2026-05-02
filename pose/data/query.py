@@ -23,8 +23,12 @@ class QueryDataset(Dataset):
         super().__init__()
         self.dataset_name = dataset_name
         self.split = split
+        if dataset_name in ["hb", "tless"]:
+            split_dir = "test_primesense"
+        else:
+            split_dir = split
 
-        self.data_path = Path(data_dir) / dataset_name / split
+        self.data_path = Path(data_dir) / dataset_name / split_dir
         self.detections_path = Path(detections_path)
 
         self.output_size = output_size
