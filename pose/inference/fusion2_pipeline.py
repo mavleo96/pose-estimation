@@ -36,10 +36,10 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def fusion_embeddings(embeddings_dino, embeddings_dift, alpha):
-    embedding_dino = F.normalize(embeddings_dino, dim=-1)
+def fusion_embeddings(embeddings_dift, embeddings_dino, alpha):
     embedding_dift = F.normalize(embeddings_dift, dim=-1)
-    return torch.concat([alpha * embedding_dino, (1 - alpha) * embedding_dift], dim=-1)
+    embedding_dino = F.normalize(embeddings_dino, dim=-1)
+    return torch.concat([alpha * embedding_dift, (1 - alpha) * embedding_dino], dim=-1)
 
 
 def fusion_pipeline(
@@ -121,7 +121,7 @@ def fusion_pipeline(
         depth_scale=renderer.camera.depth_scale,
         rgb_transform=imagenet_transform,
     )
-    logger.info("Precomputing DIFT embeddings...")
+    logger.info("Precomputing DINO PCA...")
     precompute_pca(
         embeddings_dir=embeddings_dir,
         embedding_prefix="dino",
@@ -158,7 +158,7 @@ def fusion_pipeline(
         patch_size=dift_model.stride,
     )
     logger.info("Combining DINO and DIFT embeddings...")
-    combine_embeddings(alpha, embeddings_dir, "dino", "dift")
+    combine_embeddings(alpha, embeddings_dir, "dift", "dino")
 
     logger.info("Precomputing point embeddings...")
     precompute_point_embeddings(
@@ -266,7 +266,7 @@ def fusion_pipeline(
             query_embeddings_dift = dift_pca(query_embeddings_dift)
 
             query_embeddings = fusion_embeddings(
-                query_embeddings_dino, query_embeddings_dift, alpha
+                query_embeddings_dift, query_embeddings_dino, alpha
             )
 
         del query_rgb
