@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from tqdm import tqdm
 
-from configs import DATA_DIR
+from configs import DATA_DIR, DETECTIONS_PATH_DICT
 
 from ..data import ImageGroupedBatchSampler, ObjectPointDataset, QueryDataCollator, QueryDataset
 from ..data.transforms import imagenet_transform, sd_transform
@@ -349,18 +349,15 @@ def main() -> None:
     parser.add_argument("--run_name", type=str, required=True)
     parser.add_argument("--dataset_name", type=str, required=True)
     parser.add_argument("--split", type=str, default="test")
-    parser.add_argument("--detections_path", type=str, required=True)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--dtype", type=str, default="bfloat16")
     parser.add_argument("--batch_size", type=int, default=4)
-    # parser.add_argument("--feat_size", type=int, nargs=2, default=[32, 32])
     parser.add_argument("--alpha", type=float, default=0.5)
     parser.add_argument("--n_src_points", type=int, default=5000)
     parser.add_argument("--n_tar_points", type=int, default=1000)
     parser.add_argument("--dino_model_type", type=str, default="dinov2")
     parser.add_argument("--dino_output_size", type=int, nargs=2, default=[224, 224])
     parser.add_argument("--dino_batch_size", type=int, default=20)
-    # parser.add_argument("--dift_output_size", type=int, nargs=2, default=[512, 512])
     parser.add_argument("--dift_batch_size", type=int, default=4)
     parser.add_argument("--up_block_indices", type=int, nargs="+", default=[1, 2])
     parser.add_argument("--timestep", type=int, default=50)
@@ -370,7 +367,14 @@ def main() -> None:
     args = parser.parse_args()
 
     # Paths
-    detections_path = Path(args.detections_path)
+    detections_path = (
+        Path(DATA_DIR)
+        / "bop_extra"
+        / "default_detections"
+        / "classic_bop23_model_based_unseen"
+        / "cnos-fastsam"
+        / DETECTIONS_PATH_DICT[args.dataset_name]
+    )
     results_dir = Path(DATA_DIR) / "results" / args.run_name
     results_dir.mkdir(parents=True, exist_ok=True)
 
@@ -391,14 +395,12 @@ def main() -> None:
         device=device,
         dtype=dtype,
         batch_size=args.batch_size,
-        # feat_size=tuple(args.feat_size),
         alpha=args.alpha,
         n_src_points=args.n_src_points,
         n_tar_points=args.n_tar_points,
         dino_model_type=args.dino_model_type,
         dino_output_size=tuple(args.dino_output_size),
         dino_batch_size=args.dino_batch_size,
-        # dift_output_size=tuple(args.dift_output_size),
         dift_batch_size=args.dift_batch_size,
         up_block_indices=tuple(args.up_block_indices),
         timestep=args.timestep,

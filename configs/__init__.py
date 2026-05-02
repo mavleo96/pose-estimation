@@ -1,4 +1,12 @@
-from .constants import BOP_CLASSIC, BOP_H3, BOP_INDUSTRIAL, DATA_DIR, RESULTS_DIR, TRAIN_DATASETS
+from .constants import (
+    BOP_CLASSIC,
+    BOP_H3,
+    BOP_INDUSTRIAL,
+    DATA_DIR,
+    DETECTIONS_PATH_DICT,
+    RESULTS_DIR,
+    TRAIN_DATASETS,
+)
 
 __all__ = [
     "DATA_DIR",
@@ -7,4 +15,5 @@ __all__ = [
     "BOP_H3",
     "BOP_INDUSTRIAL",
     "TRAIN_DATASETS",
+    "DETECTIONS_PATH_DICT",
 ]
