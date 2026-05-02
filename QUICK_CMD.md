@@ -1,17 +1,7 @@
 ## Environment Setup
-Creates conda env `pose` from `env2.yml` (repo root is detected automatically so `./bop_toolkit` and `./sonata` resolve). If `pose` already exists: `conda env remove -n pose` first.
-
 ```bash
-bash scripts/setup_env.sh
+conda env create -f env.yml
 ```
-
-Flash-attn uses a **community prebuilt wheel** (see script comments and [flash-attention#2425](https://github.com/Dao-AILab/flash-attention/issues/2425)); other Python tags / finder: [flashattn.dev](https://flashattn.dev/). If the wheel fails, build from source with `TORCH_CUDA_ARCH_LIST` and `pip install flash-attn --no-build-isolation` as documented in `scripts/setup_env.sh` comments.
-
-## PCR using kabsch
-```bash
-python testing.py test_dataset_name=lmo run_id=lmo_hard_dinov2 +corres=hard +embedding_model=dinov2 +dino_components=64 +embedding_desc=avg_normalized
-```
-
 
 ## Download datasets
 ```bash
@@ -34,78 +24,41 @@ cnos-fastsam_ycbv-test_f4f2127c-6f59-447c-95b3-28e1e591f1a1.json
 
 ## Run PnP pipeline
 ```bash
-python -m pose.inference.pnp_pipeline \
-    --run_name lmo-dinov2-pnp-224 \
-    --dataset_name lmo \
-    --detections_path /data/pose-estimation/bop_extra/default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_lmo-test_3cb298ea-e2eb-4713-ae9e-5a7134c5da0f.json \
-    --device cuda \
-    --dtype bfloat16 \
-    --output_size 224 224 \
-    --batch_size 4 \
-    --embedding_model dinov2 \
-    --render_templates
-
-python -m pose.inference.kabsch_pipeline \
-    --run_name lmo-dinov2-kabsch-224 \
-    --dataset_name lmo \
-    --detections_path /data/pose-estimation/bop_extra/default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_lmo-test_3cb298ea-e2eb-4713-ae9e-5a7134c5da0f.json \
-    --device cuda \
-    --dtype bfloat16 \
-    --output_size 224 224 \
-    --batch_size 4 \
-    --n_src_points 5000 \
-    --n_tar_points 1000 \
-    --embedding_model dinov2 \
-    --render_templates
-
-
-python -m pose.inference.dift_pipeline \
-    --run_name lmo-depthdift-kabsch-512 \
-    --dataset_name lmo \
-    --detections_path /data/pose-estimation/bop_extra/default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_lmo-test_3cb298ea-e2eb-4713-ae9e-5a7134c5da0f.json \
-    --device cuda \
-    --dtype bfloat16 \
-    --output_size 512 512 \
-    --batch_size 4 \
-    --up_block_indices 1 2 \
-    --timestep 50 \
-    --ensemble_size 4 \
-    --embedding_batch_size 4 \
-    --render_templates
-
-python -m pose.inference.sonata_pipeline \
-    --run_name lmo-sonata-kabsch-256 \
-    --dataset_name lmo \
-    --detections_path /data/pose-estimation/bop_extra/default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_lmo-test_3cb298ea-e2eb-4713-ae9e-5a7134c5da0f.json \
-    --device cuda \
-    --dtype bfloat16 \
-    --output_size 256 256 \
-    --batch_size 4 \
-    --n_src_points 5000 \
-    --n_tar_points 1000 \
-    --grid_size 0.01 \
-    --coord_scale 0.01 \
-    --enc_patch_size 128
-
 python -m pose.inference.fusion_pipeline \
-    --run_name lmo-fusion-kabsch-0.5- \
+    --run_name lmo-fusion-kabsch-50-12-50 \
     --dataset_name lmo \
     --detections_path /data/pose-estimation/bop_extra/default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_lmo-test_3cb298ea-e2eb-4713-ae9e-5a7134c5da0f.json \
     --device cuda \
     --dtype bfloat16 \
     --batch_size 4 \
-    --feat_size 32 32 \
     --alpha 0.5 \
     --n_src_points 5000 \
     --n_tar_points 1000 \
     --dino_model_type dinov2 \
-    --dino_output_size 448 448 \
+    --dino_output_size 224 224 \
     --dino_batch_size 20 \
-    --dift_output_size 512 512 \
     --dift_batch_size 4 \
     --up_block_indices 1 2 \
     --timestep 50 \
     --ensemble_size 4 \
+    --sim_threshold 0.0 \
+    --render_templates
+
+python -m pose.inference.fusion2_pipeline \
+    --run_name lmo-fusion2-kabsch-50-12-250 \
+    --dataset_name lmo \
+    --detections_path /data/pose-estimation/bop_extra/default_detections/classic_bop23_model_based_unseen/cnos-fastsam/cnos-fastsam_lmo-test_3cb298ea-e2eb-4713-ae9e-5a7134c5da0f.json \
+    --device cuda \
+    --dtype bfloat16 \
+    --batch_size 4 \
+    --alpha 0.5 \
+    --n_src_points 5000 \
+    --n_tar_points 1000 \
+    --dino_model_type dinov2 \
+    --dino_output_size 224 224 \
+    --dino_batch_size 20 \
+    --dift_batch_size 4 \
+    --up_block_indices 1 2 \
     --sim_threshold 0.0 \
     --render_templates
 
@@ -116,9 +69,9 @@ python -m pose.inference.fusion_pipeline \
 ```bash
 BOP_PATH=/data/pose-estimation python bop_toolkit/scripts/eval_bop19_pose.py \
     --renderer_type=vispy \
-    --results_path /data/pose-estimation/results/lmo-dinov2-pnp-224 \
-    --eval_path /data/pose-estimation/results/lmo-dinov2-pnp-224/bop_eval \
-    --result_filenames=lmo-dinov2-pnp-224_lmo-test.csv \
+    --results_path /data/pose-estimation/results/lmo-fusion-kabsch-50-12-50 \
+    --eval_path /data/pose-estimation/results/lmo-fusion-kabsch-50-12-50/bop_eval \
+    --result_filenames=lmo-fusion-kabsch-50-12-50_lmo-test.csv \
     --num_workers=1 \
     --cleanup_eval
 ```
