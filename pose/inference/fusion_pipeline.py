@@ -49,14 +49,12 @@ def fusion_pipeline(
     device: torch.device,
     dtype: torch.dtype = torch.bfloat16,
     batch_size: int = 4,
-    # feat_size: tuple[int, int] = (32, 32),
     alpha: float = 0.5,
     n_src_points: int = 5000,
     n_tar_points: int = 1000,
     dino_model_type: str = "dinov2",
-    dino_output_size: tuple[int, int] = (224, 224),
+    dino_output_size: tuple[int, int] = (448, 448),
     dino_batch_size: int = 20,
-    # dift_output_size: tuple[int, int] = (512, 512),
     dift_batch_size: int = 4,
     up_block_indices: tuple[int, ...] = (1, 2),
     timestep: int = 50,
@@ -105,7 +103,8 @@ def fusion_pipeline(
 
     # Compute feature and output size
     # Note: this is flaky, but it works for now
-    dift_output_size = (feat_size[0] * dift_model.stride, feat_size[1] * dift_model.stride)
+    dift_output_size = (512, 512)
+    effective_stride = 512 // feat_size[0]
 
     # Precompute DINO embeddings and PCA
     def dino_model_wrapper(batch):
@@ -162,7 +161,7 @@ def fusion_pipeline(
         embeddings_dir=embeddings_dir,
         embedding_prefix="dift",
         pca=dift_pca,
-        patch_size=dift_model.stride,
+        patch_size=effective_stride,
     )
     logger.info("Combining DINO and DIFT embeddings...")
     combine_embeddings(alpha, embeddings_dir, "dift", "dino")
@@ -356,7 +355,7 @@ def main() -> None:
     parser.add_argument("--n_src_points", type=int, default=5000)
     parser.add_argument("--n_tar_points", type=int, default=1000)
     parser.add_argument("--dino_model_type", type=str, default="dinov2")
-    parser.add_argument("--dino_output_size", type=int, nargs=2, default=[224, 224])
+    parser.add_argument("--dino_output_size", type=int, nargs=2, default=[448, 448])
     parser.add_argument("--dino_batch_size", type=int, default=20)
     parser.add_argument("--dift_batch_size", type=int, default=4)
     parser.add_argument("--up_block_indices", type=int, nargs="+", default=[1, 2])
@@ -379,7 +378,6 @@ def main() -> None:
     results_dir.mkdir(parents=True, exist_ok=True)
 
     # Args
-    # output_size = tuple(args.dino_output_size)
     device = torch.device(args.device)
     dtype = getattr(torch, args.dtype)
 
