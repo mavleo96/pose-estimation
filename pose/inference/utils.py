@@ -145,6 +145,9 @@ def precompute_pca(embeddings_dir, embedding_prefix, pca, patch_size):
 
     pca_embeddings = np.stack(pca_embeddings_list, axis=0)
 
+    # delete original embeddings
+    (embeddings_dir / f"{embedding_prefix}_image_embeddings.npy").unlink()
+
     np.save(embeddings_dir / f"{embedding_prefix}_pca_embeddings.npy", pca_embeddings)
     torch.save(pca.state_dict(), embeddings_dir / f"{embedding_prefix}_pca.pt")
 
